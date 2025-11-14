@@ -1,0 +1,177 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg-primary: #131314;
+  --bg-secondary: #1e1f20;
+  --bg-tertiary: #2d2e30;
+  --bg-hover: #3c3d3f;
+  --text-primary: #e3e3e3;
+  --text-secondary: #9aa0a6;
+  --text-tertiary: #80868b;
+  --border-color: #3c4043;
+  --accent-blue: #8ab4f8;
+  --accent-blue-hover: #a1c5fd;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body {
+  height: 100%;
+  overflow: hidden;
+}
+
+body {
+  color: var(--text-primary);
+  background: var(--bg-primary);
+  font-family: var(--font-inter), sans-serif;
+  line-height: 1.6;
+}
+
+/* 스크롤바 스타일 */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--bg-secondary);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--bg-tertiary);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--bg-hover);
+}
+
+/* 입력 필드 스타일 */
+input, textarea {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  padding: 8px 12px;
+  font-family: inherit;
+  font-size: 14px;
+}
+
+input:focus, textarea:focus {
+  outline: none;
+  border-color: var(--accent-blue);
+  box-shadow: 0 0 0 1px var(--accent-blue);
+}
+
+input::placeholder, textarea::placeholder {
+  color: var(--text-tertiary);
+}
+
+/* 버튼 기본 스타일 재정의 */
+button {
+  font-family: inherit;
+}
+
+/* 마크다운 스타일 */
+.prose {
+  color: inherit;
+}
+
+.prose p {
+  margin-top: 0.5em;
+  margin-bottom: 0.5em;
+}
+
+.prose p:first-child {
+  margin-top: 0;
+}
+
+.prose p:last-child {
+  margin-bottom: 0;
+}
+
+.prose pre {
+  background: var(--bg-tertiary);
+  border-radius: 6px;
+  padding: 1em;
+  overflow-x: auto;
+  margin: 1em 0;
+}
+
+.prose code {
+  background: var(--bg-tertiary);
+  padding: 0.125em 0.375em;
+  border-radius: 3px;
+  font-size: 0.9em;
+}
+
+.prose pre code {
+  background: transparent;
+  padding: 0;
+}
+
+.prose img {
+  max-width: 100%;
+  height: auto;
+}
+
+.prose a {
+  color: var(--accent-blue);
+  text-decoration: none;
+}
+
+.prose a:hover {
+  text-decoration: underline;
+}
+
+.prose ul, .prose ol {
+  margin: 0.5em 0;
+  padding-left: 1.5em;
+}
+
+.prose li {
+  margin: 0.25em 0;
+}
+
+.prose blockquote {
+  border-left: 4px solid var(--accent-blue);
+  padding-left: 1em;
+  margin: 1em 0;
+  font-style: italic;
+  color: var(--text-secondary);
+}
+
+.prose table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 1em 0;
+}
+
+.prose th,
+.prose td {
+  border: 1px solid var(--border-color);
+  padding: 0.5em;
+}
+
+.prose th {
+  background: var(--bg-tertiary);
+  font-weight: 600;
+}
+
+.prose hr {
+  border: none;
+  border-top: 1px solid var(--border-color);
+  margin: 1.5em 0;
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+}
