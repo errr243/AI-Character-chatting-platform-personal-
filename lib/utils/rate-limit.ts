@@ -28,7 +28,7 @@ const createRateLimiter = (window: string, limit: number, prefix: string) => {
   
   return new Ratelimit({
     redis,
-    limiter: Ratelimit.slidingWindow(limit, window),
+    limiter: Ratelimit.slidingWindow(limit, window as any),
     analytics: true,
     prefix,
   });
