@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>나만의 AI 캐릭터 챗</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="page">
+      <header>
+        <div>
+          <h1>나만의 AI 캐릭터</h1>
+          <p>원하는 캐릭터를 골라 대화하거나 직접 만들어보세요.</p>
+        </div>
+        <div id="status-pill">연결 상태 확인 중...</div>
+      </header>
+
+      <section class="layout">
+        <aside>
+          <label for="character-select">캐릭터 선택</label>
+          <select id="character-select"></select>
+
+          <div class="character-card" id="character-info">
+            <h2>캐릭터 정보</h2>
+            <p>불러오는 중...</p>
+          </div>
+
+          <div class="card">
+            <h2>커스텀 캐릭터</h2>
+            <form id="character-form">
+              <input type="text" name="name" placeholder="이름" required />
+              <input
+                type="text"
+                name="summary"
+                placeholder="한 줄 소개"
+                required
+              />
+              <textarea
+                name="style"
+                placeholder="대화 스타일 설명"
+                rows="2"
+                required
+              ></textarea>
+              <textarea
+                name="greeting"
+                placeholder="첫 인사"
+                rows="2"
+                required
+              ></textarea>
+              <input
+                type="text"
+                name="topics"
+                placeholder="주제 (쉼표로 구분)"
+              />
+              <button type="submit">추가</button>
+            </form>
+          </div>
+        </aside>
+
+        <main>
+          <div id="chat-window"></div>
+          <form id="chat-form">
+            <textarea
+              id="chat-input"
+              rows="2"
+              placeholder="메시지를 입력하고 Enter 또는 버튼을 눌러 전송"
+              required
+            ></textarea>
+            <div class="form-actions">
+              <span id="hint">Shift + Enter 로 줄바꿈</span>
+              <button type="submit">보내기</button>
+            </div>
+          </form>
+        </main>
+      </section>
+    </div>
+
+    <script src="main.js" type="module"></script>
+  </body>
+</html>
