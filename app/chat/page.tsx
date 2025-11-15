@@ -39,6 +39,9 @@ export default function ChatPage() {
     setMaxOutputTokens(settings.maxOutputTokens);
     setThinkingBudget(settings.thinkingBudget);
     
+    // API 키는 설정 UI에서 수동으로 추가하거나, 환경 변수로 관리
+    // 보안을 위해 코드에 하드코딩하지 않음
+    
     const loaded = loadChatHistories();
     setHistories(loaded);
     
@@ -252,12 +255,55 @@ export default function ChatPage() {
           model: currentHistory.model,
           maxOutputTokens: maxOutputTokens !== 8192 ? maxOutputTokens : undefined,
           thinkingBudget: thinkingBudget,
+          // 보안: 클라이언트에서 API 키를 직접 보내는 것은 권장하지 않음
+          // 가능하면 서버 사이드에서 환경 변수로 관리하는 것을 권장
+          // 개발/테스트 목적으로만 클라이언트 저장 방식 사용
+          apiKey: (() => {
+            if (typeof window !== 'undefined') {
+              try {
+                const { getActiveApiKey } = require('@/lib/storage/apiKeys');
+                const key = getActiveApiKey();
+                // 클라이언트에 키가 없으면 서버가 환경 변수 사용
+                return key || undefined;
+              } catch {
+                return undefined;
+              }
+            }
+            return undefined;
+          })(),
         }),
       });
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || `서버 오류 (${response.status})`);
+        const errorMessage = errorData.error || `서버 오류 (${response.status})`;
+        
+        // 429 오류 발생 시 다음 API 키로 전환 시도
+        if (response.status === 429 && typeof window !== 'undefined') {
+          try {
+            const { getNextAvailableApiKey, markApiKeyQuotaExceeded, loadApiKeys, getActiveApiKey } = require('@/lib/storage/apiKeys');
+            const keys = loadApiKeys();
+            const activeKey = getActiveApiKey();
+            const currentKey = keys.find((k: any) => k.key === activeKey);
+            
+            if (currentKey) {
+              markApiKeyQuotaExceeded(currentKey.id);
+            }
+            
+            const nextKey = getNextAvailableApiKey(currentKey?.id);
+            if (nextKey && nextKey !== currentKey?.key) {
+              // 다음 키로 전환 후 재시도
+              console.log('🔄 할당량 초과로 다른 API 키로 전환 중...');
+              // 재시도는 사용자가 수동으로 해야 함
+              throw new Error('할당량 초과로 다른 API 키로 자동 전환했습니다. 다시 시도해주세요.');
+            }
+          } catch (switchError) {
+            // API 키 전환 실패 시 원래 오류 메시지 사용
+            console.error('API 키 전환 실패:', switchError);
+          }
+        }
+        
+        throw new Error(errorMessage);
       }
 
       const data = await response.json();

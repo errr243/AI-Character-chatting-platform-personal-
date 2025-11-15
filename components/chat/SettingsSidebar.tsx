@@ -1,9 +1,10 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Bot, PenSquare, SlidersHorizontal, Zap, MessageSquare, Brain, BookOpen, ChevronRight, FileText, Download, Upload } from 'lucide-react';
+import { Bot, PenSquare, SlidersHorizontal, Zap, MessageSquare, Brain, BookOpen, ChevronRight, FileText, Download, Upload, Key, Plus, Trash2, Check } from 'lucide-react';
 import { loadSettings, saveSettings, type OutputSpeed, type MaxOutputTokens, type ThinkingBudget } from '@/lib/storage/settings';
 import { MemoryModal } from './MemoryModal';
+import { loadApiKeys, addApiKey, deleteApiKey, updateApiKey, getActiveApiKey, type ApiKeyInfo } from '@/lib/storage/apiKeys';
 
 interface SettingsSidebarProps {
   characterName: string;
@@ -47,12 +48,21 @@ export const SettingsSidebar: React.FC<SettingsSidebarProps> = ({
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [showMemoryModal, setShowMemoryModal] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  
+  // API 키 관리 상태
+  const [apiKeys, setApiKeys] = useState<ApiKeyInfo[]>([]);
+  const [showAddKey, setShowAddKey] = useState(false);
+  const [newKeyName, setNewKeyName] = useState('');
+  const [newKeyValue, setNewKeyValue] = useState('');
 
   useEffect(() => {
     const settings = loadSettings();
     onOutputSpeedChange(settings.outputSpeed);
     onMaxOutputTokensChange(settings.maxOutputTokens);
     onThinkingBudgetChange(settings.thinkingBudget);
+    
+    // API 키 목록 로드
+    setApiKeys(loadApiKeys());
   }, []);
 
   const handleOutputSpeedChange = (speed: OutputSpeed) => {
@@ -146,6 +156,35 @@ export const SettingsSidebar: React.FC<SettingsSidebarProps> = ({
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
+  };
+
+  // API 키 추가
+  const handleAddApiKey = () => {
+    if (!newKeyName.trim() || !newKeyValue.trim()) {
+      alert('이름과 API 키를 모두 입력해주세요.');
+      return;
+    }
+    
+    addApiKey(newKeyValue.trim(), newKeyName.trim());
+    setApiKeys(loadApiKeys());
+    setNewKeyName('');
+    setNewKeyValue('');
+    setShowAddKey(false);
+    alert('API 키가 추가되었습니다.');
+  };
+
+  // API 키 삭제
+  const handleDeleteApiKey = (id: string) => {
+    if (confirm('이 API 키를 삭제하시겠습니까?')) {
+      deleteApiKey(id);
+      setApiKeys(loadApiKeys());
+    }
+  };
+
+  // API 키 활성화/비활성화
+  const handleToggleApiKey = (id: string, isActive: boolean) => {
+    updateApiKey(id, { isActive: !isActive });
+    setApiKeys(loadApiKeys());
   };
 
   return (
@@ -351,6 +390,128 @@ export const SettingsSidebar: React.FC<SettingsSidebarProps> = ({
               10턴(20개 메시지)마다 자동 생성됩니다
             </p>
           )}
+        </div>
+
+        {/* API 키 관리 */}
+        <div className="border-t border-[var(--border-color)] pt-4">
+          <div className="flex items-center justify-between mb-3">
+            <label className="block text-sm font-semibold text-[var(--text-secondary)]">
+              API 키 관리
+            </label>
+            <button
+              onClick={() => setShowAddKey(!showAddKey)}
+              className="p-1 hover:bg-[var(--bg-hover)] rounded transition-colors"
+              title="API 키 추가"
+            >
+              <Plus size={16} className="text-[var(--text-secondary)]" />
+            </button>
+          </div>
+          
+          {/* API 키 추가 폼 */}
+          {showAddKey && (
+            <div className="mb-3 p-3 bg-[var(--bg-tertiary)] rounded-md space-y-2">
+              <input
+                type="text"
+                placeholder="API 키 이름 (예: 키 1, 키 2)"
+                value={newKeyName}
+                onChange={(e) => setNewKeyName(e.target.value)}
+                className="w-full px-3 py-2 bg-[var(--bg-primary)] border border-[var(--border-color)] rounded-md text-sm text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-blue)]"
+              />
+              <input
+                type="password"
+                placeholder="Gemini API 키"
+                value={newKeyValue}
+                onChange={(e) => setNewKeyValue(e.target.value)}
+                className="w-full px-3 py-2 bg-[var(--bg-primary)] border border-[var(--border-color)] rounded-md text-sm text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-blue)]"
+              />
+              <div className="flex gap-2">
+                <button
+                  onClick={handleAddApiKey}
+                  className="flex-1 px-3 py-1.5 bg-[var(--accent-blue)] hover:bg-[var(--accent-blue-hover)] text-white rounded-md text-sm transition-colors"
+                >
+                  추가
+                </button>
+                <button
+                  onClick={() => {
+                    setShowAddKey(false);
+                    setNewKeyName('');
+                    setNewKeyValue('');
+                  }}
+                  className="px-3 py-1.5 bg-[var(--bg-primary)] hover:bg-[var(--bg-hover)] text-[var(--text-primary)] rounded-md text-sm transition-colors"
+                >
+                  취소
+                </button>
+              </div>
+            </div>
+          )}
+          
+          {/* API 키 목록 */}
+          <div className="space-y-2 max-h-48 overflow-y-auto">
+            {apiKeys.length === 0 ? (
+              <p className="text-xs text-[var(--text-tertiary)] px-2 py-4 text-center">
+                API 키가 없습니다. 추가해주세요.
+              </p>
+            ) : (
+              apiKeys.map((key) => {
+                const isActive = getActiveApiKey() === key.key;
+                return (
+                  <div
+                    key={key.id}
+                    className={`p-2 rounded-md border ${
+                      isActive
+                        ? 'bg-[var(--bg-tertiary)] border-[var(--accent-blue)]'
+                        : 'bg-[var(--bg-primary)] border-[var(--border-color)]'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2 flex-1 min-w-0">
+                        <button
+                          onClick={() => handleToggleApiKey(key.id, key.isActive)}
+                          className={`p-1 rounded transition-colors ${
+                            key.isActive
+                              ? 'text-[var(--accent-blue)]'
+                              : 'text-[var(--text-tertiary)]'
+                          }`}
+                          title={key.isActive ? '비활성화' : '활성화'}
+                        >
+                          <Check size={14} className={key.isActive ? '' : 'opacity-30'} />
+                        </button>
+                        <span className="text-sm text-[var(--text-primary)] truncate">
+                          {key.name}
+                        </span>
+                        {isActive && (
+                          <span className="text-xs bg-[var(--accent-blue)] text-white px-1.5 py-0.5 rounded">
+                            사용 중
+                          </span>
+                        )}
+                        {key.quotaExceeded && (
+                          <span className="text-xs bg-red-500/20 text-red-400 px-1.5 py-0.5 rounded">
+                            할당량 초과
+                          </span>
+                        )}
+                      </div>
+                      <button
+                        onClick={() => handleDeleteApiKey(key.id)}
+                        className="p-1 text-[var(--text-tertiary)] hover:text-red-400 transition-colors"
+                        title="삭제"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                    {key.lastUsed && (
+                      <p className="text-xs text-[var(--text-tertiary)] mt-1 px-6">
+                        마지막 사용: {new Date(key.lastUsed).toLocaleString('ko-KR')}
+                      </p>
+                    )}
+                  </div>
+                );
+              })
+            )}
+          </div>
+          
+          <p className="text-xs text-[var(--text-tertiary)] mt-2 px-2">
+            할당량 초과 시 자동으로 다른 활성 API 키로 전환됩니다
+          </p>
         </div>
 
         {/* 데이터 백업/복원 */}

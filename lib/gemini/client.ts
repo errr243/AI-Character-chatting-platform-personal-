@@ -4,14 +4,24 @@ import type { TranslateRequest, TranslateResponse, GeminiConfig, ChatRequest, Ch
 export class GeminiClient {
   private genAI: GoogleGenerativeAI;
   private defaultModel: 'gemini-flash' | 'gemini-pro';
+  private currentApiKey: string;
+  private currentApiKeyId?: string;
 
   constructor(config: GeminiConfig) {
     if (!config.apiKey) {
       throw new Error('GOOGLE_GEMINI_API_KEY is required');
     }
     
+    this.currentApiKey = config.apiKey;
     this.genAI = new GoogleGenerativeAI(config.apiKey);
     this.defaultModel = config.model || 'gemini-flash';
+  }
+
+  // API 키 전환 메서드
+  switchApiKey(newApiKey: string): void {
+    this.currentApiKey = newApiKey;
+    this.genAI = new GoogleGenerativeAI(newApiKey);
+    console.log('🔄 API 키가 전환되었습니다.');
   }
 
   async translate(request: TranslateRequest): Promise<TranslateResponse> {
@@ -274,8 +284,42 @@ Translate the following text:`;
       
       if (error?.message?.includes('503') || error?.message?.includes('overloaded')) {
         errorMessage = '서버가 일시적으로 과부하 상태입니다. 잠시 후 다시 시도해주세요.';
-      } else if (error?.message?.includes('429') || error?.message?.includes('rate limit')) {
-        errorMessage = '요청이 너무 많습니다. 잠시 후 다시 시도해주세요.';
+      } else if (error?.message?.includes('429') || error?.message?.includes('rate limit') || error?.message?.includes('quota')) {
+        // 할당량 초과 오류 - 특별한 에러 타입으로 표시하여 API 라우트에서 처리
+        // API 라우트에서 자동 전환 로직 처리
+        
+        // 할당량 초과 오류 상세 처리
+        const quotaMatch = error?.message?.match(/limit:\s*(\d+)/);
+        const retryMatch = error?.message?.match(/retry in ([\d.]+)s/i);
+        const modelMatch = error?.message?.match(/model:\s*([^\s,]+)/i);
+        
+        let quotaInfo = '';
+        if (quotaMatch) {
+          quotaInfo = ` (일일 ${quotaMatch[1]}회 제한)`;
+        }
+        
+        let retryInfo = '';
+        if (retryMatch) {
+          const retrySeconds = Math.ceil(parseFloat(retryMatch[1]));
+          const retryMinutes = Math.floor(retrySeconds / 60);
+          const retrySecs = retrySeconds % 60;
+          if (retryMinutes > 0) {
+            retryInfo = ` 약 ${retryMinutes}분 ${retrySecs}초 후 재시도 가능합니다.`;
+          } else {
+            retryInfo = ` 약 ${retrySeconds}초 후 재시도 가능합니다.`;
+          }
+        }
+        
+        let modelInfo = '';
+        if (modelMatch && modelMatch[1].includes('pro')) {
+          modelInfo = ' Flash 모델로 전환하거나 잠시 후 다시 시도해주세요.';
+        }
+        
+        if (error?.message?.includes('free_tier')) {
+          errorMessage = `무료 티어 일일 할당량을 초과했습니다.${quotaInfo}${retryInfo}${modelInfo || ' 잠시 후 다시 시도해주세요.'}`;
+        } else {
+          errorMessage = `요청 한도에 도달했습니다.${quotaInfo}${retryInfo}${modelInfo || ' 잠시 후 다시 시도해주세요.'}`;
+        }
       } else if (error?.message?.includes('401') || error?.message?.includes('API key')) {
         errorMessage = 'API 키가 유효하지 않습니다. 설정을 확인해주세요.';
       } else if (error?.message) {
