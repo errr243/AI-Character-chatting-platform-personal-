@@ -110,13 +110,15 @@ export const SettingsSidebar: React.FC<SettingsSidebarProps> = ({
       const chatHistories = localStorage.getItem('chat_histories');
       const chatSettings = localStorage.getItem('chat_settings');
       const characters = localStorage.getItem('characters');
+      const lorebooks = localStorage.getItem('lorebooks');
 
       const exportData = {
         chat_histories: chatHistories ? JSON.parse(chatHistories) : [],
         chat_settings: chatSettings ? JSON.parse(chatSettings) : null,
         characters: characters ? JSON.parse(characters) : [],
+        lorebooks: lorebooks ? JSON.parse(lorebooks) : [],
         exportDate: new Date().toISOString(),
-        version: '1.0',
+        version: '1.1',
       };
 
       const dataStr = JSON.stringify(exportData, null, 2);
@@ -162,6 +164,10 @@ export const SettingsSidebar: React.FC<SettingsSidebarProps> = ({
 
         if (importData.characters && Array.isArray(importData.characters)) {
           localStorage.setItem('characters', JSON.stringify(importData.characters));
+        }
+
+        if (importData.lorebooks && Array.isArray(importData.lorebooks)) {
+          localStorage.setItem('lorebooks', JSON.stringify(importData.lorebooks));
         }
 
         alert('데이터 가져오기가 완료되었습니다! 페이지를 새로고침합니다.');
@@ -634,7 +640,7 @@ export const SettingsSidebar: React.FC<SettingsSidebarProps> = ({
             />
           </div>
           <p className="text-xs text-[var(--text-tertiary)] mt-2 px-2">
-            대화 기록, 설정, 캐릭터를 백업하거나 복원할 수 있습니다
+            대화 기록(유저노트 포함), 설정, 캐릭터, 로어북을 백업하거나 복원할 수 있습니다
           </p>
         </div>
 
