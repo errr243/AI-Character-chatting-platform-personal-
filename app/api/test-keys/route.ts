@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 // API 키 상태 확인 엔드포인트 (개발/디버깅용)
+// Vercel 배포 확인을 위한 업데이트
 export async function GET(request: NextRequest) {
   try {
     // 환경 변수에서 모든 API 키 확인
