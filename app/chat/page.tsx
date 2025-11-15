@@ -38,6 +38,16 @@ export default function ChatPage() {
   const [maxOutputTokens, setMaxOutputTokens] = useState<MaxOutputTokens>(8192);
   const [thinkingBudget, setThinkingBudget] = useState<ThinkingBudget>(undefined);
   const [maxActiveLorebooks, setMaxActiveLorebooks] = useState<MaxActiveLorebooks>(5);
+  const [isSettingsCollapsed, setIsSettingsCollapsed] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    const saved = localStorage.getItem('settings_sidebar_collapsed');
+    return saved === 'true';
+  });
+  const [settingsWidth, setSettingsWidth] = useState(() => {
+    if (typeof window === 'undefined') return 384;
+    const saved = localStorage.getItem('settings_sidebar_width');
+    return saved ? parseInt(saved, 10) : 384;
+  });
 
   // 초기 로드
   useEffect(() => {
@@ -615,6 +625,43 @@ export default function ChatPage() {
     saveChatHistory(updated);
   };
 
+  // 사이드바 토글
+  const handleToggleSettings = () => {
+    const newState = !isSettingsCollapsed;
+    setIsSettingsCollapsed(newState);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('settings_sidebar_collapsed', String(newState));
+    }
+  };
+
+  // 사이드바 리사이즈
+  const handleResizeStart = (e: React.MouseEvent) => {
+    e.preventDefault();
+    const startX = e.clientX;
+    const startWidth = settingsWidth;
+
+    const handleMouseMove = (e: MouseEvent) => {
+      const diff = startX - e.clientX; // 왼쪽으로 드래그하면 증가
+      const newWidth = Math.max(300, Math.min(800, startWidth + diff)); // 최소 300px, 최대 800px
+      setSettingsWidth(newWidth);
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('settings_sidebar_width', String(newWidth));
+      }
+    };
+
+    const handleMouseUp = () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    };
+
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+  };
+
   if (!currentHistory) {
     return (
       <div className="h-screen flex items-center justify-center bg-[var(--bg-primary)]">
@@ -666,6 +713,8 @@ export default function ChatPage() {
         lastSummaryAt={currentHistory.lastSummaryAt}
         totalMessages={currentHistory.messages.length}
         userNote={currentHistory.userNote}
+        isCollapsed={isSettingsCollapsed}
+        width={settingsWidth}
         onCharacterNameChange={handleCharacterNameChange}
         onCharacterPersonalityChange={handleCharacterPersonalityChange}
         onModelChange={handleModelChange}
@@ -674,6 +723,8 @@ export default function ChatPage() {
         onThinkingBudgetChange={handleThinkingBudgetChange}
         onMaxActiveLorebooksChange={handleMaxActiveLorebooksChange}
         onUserNoteChange={handleUserNoteChange}
+        onToggle={handleToggleSettings}
+        onResizeStart={handleResizeStart}
       />
     </div>
   );

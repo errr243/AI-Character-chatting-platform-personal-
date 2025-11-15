@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Bot, PenSquare, SlidersHorizontal, Zap, MessageSquare, Brain, BookOpen, ChevronRight, FileText, Download, Upload, Key, Plus, Trash2, Check } from 'lucide-react';
+import { Bot, PenSquare, SlidersHorizontal, Zap, MessageSquare, Brain, BookOpen, ChevronRight, FileText, Download, Upload, Key, Plus, Trash2, Check, ChevronLeft, GripVertical } from 'lucide-react';
 import { loadSettings, saveSettings, type OutputSpeed, type MaxOutputTokens, type ThinkingBudget, type MaxActiveLorebooks } from '@/lib/storage/settings';
 import { MemoryModal } from './MemoryModal';
 import { loadApiKeys, addApiKey, deleteApiKey, updateApiKey, getActiveApiKey, setSelectedApiKeyId, getSelectedApiKeyId, type ApiKeyInfo } from '@/lib/storage/apiKeys';
@@ -19,6 +19,8 @@ interface SettingsSidebarProps {
   lastSummaryAt?: number;
   totalMessages: number;
   userNote?: string;
+  isCollapsed?: boolean;
+  width?: number;
   onCharacterNameChange: (name: string) => void;
   onCharacterPersonalityChange: (personality: string) => void;
   onModelChange: (model: 'gemini-flash' | 'gemini-pro') => void;
@@ -27,6 +29,8 @@ interface SettingsSidebarProps {
   onThinkingBudgetChange: (budget: ThinkingBudget) => void;
   onMaxActiveLorebooksChange: (max: MaxActiveLorebooks) => void;
   onUserNoteChange: (note: string) => void;
+  onToggle?: () => void;
+  onResizeStart?: (e: React.MouseEvent) => void;
 }
 
 export const SettingsSidebar: React.FC<SettingsSidebarProps> = ({
@@ -41,6 +45,8 @@ export const SettingsSidebar: React.FC<SettingsSidebarProps> = ({
   lastSummaryAt,
   totalMessages,
   userNote,
+  isCollapsed = false,
+  width = 384,
   onCharacterNameChange,
   onCharacterPersonalityChange,
   onModelChange,
@@ -49,6 +55,8 @@ export const SettingsSidebar: React.FC<SettingsSidebarProps> = ({
   onThinkingBudgetChange,
   onMaxActiveLorebooksChange,
   onUserNoteChange,
+  onToggle,
+  onResizeStart,
 }) => {
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [showMemoryModal, setShowMemoryModal] = useState(false);
@@ -242,10 +250,68 @@ export const SettingsSidebar: React.FC<SettingsSidebarProps> = ({
   };
 
   return (
-    <div className="w-96 bg-[var(--bg-secondary)] border-l border-[var(--border-color)] flex flex-col h-full overflow-y-auto p-4">
-      <div className="space-y-6">
-        {/* 헤더 */}
-        <h2 className="text-xl font-bold text-[var(--text-primary)]">설정</h2>
+    <div 
+      className="bg-[var(--bg-secondary)] border-l border-[var(--border-color)] flex flex-col h-full overflow-hidden relative"
+      style={{ width: isCollapsed ? '48px' : `${width}px`, transition: isCollapsed ? 'width 0.2s' : 'none' }}
+    >
+      {/* 리사이즈 핸들 */}
+      {!isCollapsed && onResizeStart && (
+        <div
+          onMouseDown={onResizeStart}
+          className="absolute left-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-[var(--accent-blue)] transition-colors z-10"
+          style={{ cursor: 'col-resize' }}
+        >
+          <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 opacity-0 hover:opacity-100 transition-opacity">
+            <GripVertical size={16} className="text-[var(--text-tertiary)]" />
+          </div>
+        </div>
+      )}
+
+      {/* 토글 버튼 */}
+      <div className="flex items-center justify-between p-2 border-b border-[var(--border-color)]">
+        {!isCollapsed && <h2 className="text-xl font-bold text-[var(--text-primary)]">설정</h2>}
+        {onToggle && (
+          <button
+            onClick={onToggle}
+            className="p-1.5 hover:bg-[var(--bg-hover)] rounded transition-colors"
+            title={isCollapsed ? '펼치기' : '접기'}
+          >
+            {isCollapsed ? <ChevronLeft size={20} className="text-[var(--text-secondary)]" /> : <ChevronRight size={20} className="text-[var(--text-secondary)]" />}
+          </button>
+        )}
+      </div>
+
+      <div className={`flex-1 overflow-y-auto ${isCollapsed ? 'p-2' : 'p-4'}`}>
+        {isCollapsed ? (
+          <div className="space-y-4">
+            {/* 접혔을 때 아이콘 버튼들 */}
+            <button
+              onClick={() => onModelChange(model === 'gemini-pro' ? 'gemini-flash' : 'gemini-pro')}
+              className="w-full p-2 hover:bg-[var(--bg-hover)] rounded transition-colors"
+              title={`모델: ${model === 'gemini-pro' ? 'Gemini 2.5 Pro' : 'Gemini 2.5 Flash'}`}
+            >
+              <Bot size={20} className="text-[var(--text-secondary)] mx-auto" />
+            </button>
+            <button
+              onClick={() => setShowMemoryModal(true)}
+              className="w-full p-2 hover:bg-[var(--bg-hover)] rounded transition-colors relative"
+              title="대화 메모리"
+            >
+              <BookOpen size={20} className="text-[var(--text-secondary)] mx-auto" />
+              {contextSummary && (
+                <span className="absolute top-1 right-1 w-2 h-2 bg-[var(--accent-blue)] rounded-full" />
+              )}
+            </button>
+            <button
+              onClick={() => setShowAdvanced(!showAdvanced)}
+              className="w-full p-2 hover:bg-[var(--bg-hover)] rounded transition-colors"
+              title="고급 설정"
+            >
+              <SlidersHorizontal size={20} className="text-[var(--text-secondary)] mx-auto" />
+            </button>
+          </div>
+        ) : (
+          <div className="space-y-6">
 
         {/* 모델 선택 */}
         <div>
@@ -678,6 +744,7 @@ export const SettingsSidebar: React.FC<SettingsSidebarProps> = ({
             </div>
           )}
         </div>
+        )}
       </div>
 
       {/* 메모리 모달 */}
