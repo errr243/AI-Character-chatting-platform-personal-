@@ -1,6 +1,7 @@
 // API 키 관리 스토리지
 
 const STORAGE_KEY = 'gemini_api_keys';
+const SELECTED_KEY_ID_STORAGE_KEY = 'gemini_selected_api_key_id';
 
 export interface ApiKeyInfo {
   id: string;
@@ -142,5 +143,68 @@ export function getNextAvailableApiKey(currentKeyId?: string): string | null {
   }
   
   return null;
+}
+
+// 현재 선택된 API 키 ID 저장
+export function setSelectedApiKeyId(keyId: string | null): void {
+  if (typeof window === 'undefined') return;
+  
+  try {
+    if (keyId) {
+      localStorage.setItem(SELECTED_KEY_ID_STORAGE_KEY, keyId);
+    } else {
+      localStorage.removeItem(SELECTED_KEY_ID_STORAGE_KEY);
+    }
+  } catch (error) {
+    console.error('Failed to save selected API key ID:', error);
+  }
+}
+
+// 현재 선택된 API 키 ID 로드
+export function getSelectedApiKeyId(): string | null {
+  if (typeof window === 'undefined') return null;
+  
+  try {
+    return localStorage.getItem(SELECTED_KEY_ID_STORAGE_KEY);
+  } catch (error) {
+    console.error('Failed to load selected API key ID:', error);
+    return null;
+  }
+}
+
+// 선택된 키 ID로 API 키 가져오기
+export function getSelectedApiKey(): string | null {
+  if (typeof window === 'undefined') {
+    return process.env.GOOGLE_GEMINI_API_KEY || null;
+  }
+  
+  const selectedKeyId = getSelectedApiKeyId();
+  if (!selectedKeyId) {
+    // 선택된 키가 없으면 기존 로직 사용
+    return getActiveApiKey();
+  }
+  
+  const keys = loadApiKeys();
+  const selectedKey = keys.find(k => k.id === selectedKeyId);
+  
+  if (selectedKey && selectedKey.isActive) {
+    // 할당량 초과 확인
+    if (selectedKey.quotaExceeded) {
+      const oneHour = 60 * 60 * 1000;
+      if (Date.now() - selectedKey.quotaExceeded < oneHour) {
+        // 할당량 초과된 키는 사용하지 않음, 대체 키 반환
+        return getActiveApiKey();
+      } else {
+        // 1시간이 지났으므로 할당량 초과 플래그 제거
+        updateApiKey(selectedKey.id, { quotaExceeded: undefined });
+      }
+    }
+    
+    updateApiKey(selectedKey.id, { lastUsed: Date.now() });
+    return selectedKey.key;
+  }
+  
+  // 선택된 키가 없거나 비활성화된 경우 기본 로직 사용
+  return getActiveApiKey();
 }
 

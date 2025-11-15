@@ -261,8 +261,8 @@ export default function ChatPage() {
           apiKey: (() => {
             if (typeof window !== 'undefined') {
               try {
-                const { getActiveApiKey } = require('@/lib/storage/apiKeys');
-                const key = getActiveApiKey();
+                const { getSelectedApiKey } = require('@/lib/storage/apiKeys');
+                const key = getSelectedApiKey();
                 // 클라이언트에 키가 없으면 서버가 환경 변수 사용
                 return key || undefined;
               } catch {

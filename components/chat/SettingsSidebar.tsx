@@ -4,7 +4,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Bot, PenSquare, SlidersHorizontal, Zap, MessageSquare, Brain, BookOpen, ChevronRight, FileText, Download, Upload, Key, Plus, Trash2, Check } from 'lucide-react';
 import { loadSettings, saveSettings, type OutputSpeed, type MaxOutputTokens, type ThinkingBudget } from '@/lib/storage/settings';
 import { MemoryModal } from './MemoryModal';
-import { loadApiKeys, addApiKey, deleteApiKey, updateApiKey, getActiveApiKey, type ApiKeyInfo } from '@/lib/storage/apiKeys';
+import { loadApiKeys, addApiKey, deleteApiKey, updateApiKey, getActiveApiKey, setSelectedApiKeyId, getSelectedApiKeyId, type ApiKeyInfo } from '@/lib/storage/apiKeys';
 
 interface SettingsSidebarProps {
   characterName: string;
@@ -49,21 +49,36 @@ export const SettingsSidebar: React.FC<SettingsSidebarProps> = ({
   const [showMemoryModal, setShowMemoryModal] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   
-  // API 키 관리 상태
-  const [apiKeys, setApiKeys] = useState<ApiKeyInfo[]>([]);
-  const [showAddKey, setShowAddKey] = useState(false);
-  const [newKeyName, setNewKeyName] = useState('');
-  const [newKeyValue, setNewKeyValue] = useState('');
+      // API 키 관리 상태
+      const [apiKeys, setApiKeys] = useState<ApiKeyInfo[]>([]);
+      const [showAddKey, setShowAddKey] = useState(false);
+      const [newKeyName, setNewKeyName] = useState('');
+      const [newKeyValue, setNewKeyValue] = useState('');
+      const [selectedKeyId, setSelectedKeyId] = useState<string | null>(null);
 
-  useEffect(() => {
-    const settings = loadSettings();
-    onOutputSpeedChange(settings.outputSpeed);
-    onMaxOutputTokensChange(settings.maxOutputTokens);
-    onThinkingBudgetChange(settings.thinkingBudget);
-    
-    // API 키 목록 로드
-    setApiKeys(loadApiKeys());
-  }, []);
+      useEffect(() => {
+        const settings = loadSettings();
+        onOutputSpeedChange(settings.outputSpeed);
+        onMaxOutputTokensChange(settings.maxOutputTokens);
+        onThinkingBudgetChange(settings.thinkingBudget);
+        
+        // API 키 목록 로드
+        const keys = loadApiKeys();
+        setApiKeys(keys);
+        
+        // 선택된 키 ID 로드
+        const selectedId = getSelectedApiKeyId();
+        if (selectedId && keys.find(k => k.id === selectedId)) {
+          setSelectedKeyId(selectedId);
+        } else if (keys.length > 0) {
+          // 선택된 키가 없거나 유효하지 않으면 첫 번째 활성 키 선택
+          const firstActiveKey = keys.find(k => k.isActive);
+          if (firstActiveKey) {
+            setSelectedKeyId(firstActiveKey.id);
+            setSelectedApiKeyId(firstActiveKey.id);
+          }
+        }
+      }, []);
 
   const handleOutputSpeedChange = (speed: OutputSpeed) => {
     onOutputSpeedChange(speed);
@@ -165,19 +180,39 @@ export const SettingsSidebar: React.FC<SettingsSidebarProps> = ({
       return;
     }
     
-    addApiKey(newKeyValue.trim(), newKeyName.trim());
-    setApiKeys(loadApiKeys());
+    const newKey = addApiKey(newKeyValue.trim(), newKeyName.trim());
+    const keys = loadApiKeys();
+    setApiKeys(keys);
+    
+    // 새로 추가된 키를 자동으로 선택
+    setSelectedKeyId(newKey.id);
+    setSelectedApiKeyId(newKey.id);
+    
     setNewKeyName('');
     setNewKeyValue('');
     setShowAddKey(false);
-    alert('API 키가 추가되었습니다.');
+    alert('API 키가 추가되었고 선택되었습니다.');
   };
 
   // API 키 삭제
   const handleDeleteApiKey = (id: string) => {
     if (confirm('이 API 키를 삭제하시겠습니까?')) {
+      const wasSelected = selectedKeyId === id;
       deleteApiKey(id);
-      setApiKeys(loadApiKeys());
+      const keys = loadApiKeys();
+      setApiKeys(keys);
+      
+      // 삭제된 키가 선택된 키였다면 다른 키 선택
+      if (wasSelected) {
+        const firstActiveKey = keys.find(k => k.isActive);
+        if (firstActiveKey) {
+          setSelectedKeyId(firstActiveKey.id);
+          setSelectedApiKeyId(firstActiveKey.id);
+        } else {
+          setSelectedKeyId(null);
+          setSelectedApiKeyId(null);
+        }
+      }
     }
   };
 
@@ -185,6 +220,13 @@ export const SettingsSidebar: React.FC<SettingsSidebarProps> = ({
   const handleToggleApiKey = (id: string, isActive: boolean) => {
     updateApiKey(id, { isActive: !isActive });
     setApiKeys(loadApiKeys());
+  };
+
+  // API 키 수동 선택
+  const handleSelectApiKey = (keyId: string) => {
+    setSelectedKeyId(keyId);
+    setSelectedApiKeyId(keyId);
+    alert('API 키가 변경되었습니다.');
   };
 
   return (
@@ -407,6 +449,36 @@ export const SettingsSidebar: React.FC<SettingsSidebarProps> = ({
             </button>
           </div>
           
+          {/* API 키 수동 선택 드롭다운 */}
+          {apiKeys.length > 0 && (
+            <div className="mb-3">
+              <label className="block text-xs font-medium text-[var(--text-secondary)] mb-1.5">
+                사용할 API 키 선택
+              </label>
+              <select
+                value={selectedKeyId || ''}
+                onChange={(e) => {
+                  if (e.target.value) {
+                    handleSelectApiKey(e.target.value);
+                  }
+                }}
+                className="w-full bg-[var(--bg-tertiary)] text-[var(--text-primary)] border border-[var(--border-color)] rounded-md px-3 py-2 text-sm focus:outline-none focus:border-[var(--accent-blue)]"
+              >
+                {apiKeys
+                  .filter(k => k.isActive)
+                  .map((key) => (
+                    <option key={key.id} value={key.id}>
+                      {key.name}
+                      {key.quotaExceeded ? ' (할당량 초과)' : ''}
+                    </option>
+                  ))}
+              </select>
+              <p className="text-xs text-[var(--text-tertiary)] mt-1">
+                현재 선택된 키가 모든 요청에 사용됩니다
+              </p>
+            </div>
+          )}
+          
           {/* API 키 추가 폼 */}
           {showAddKey && (
             <div className="mb-3 p-3 bg-[var(--bg-tertiary)] rounded-md space-y-2">
@@ -453,12 +525,13 @@ export const SettingsSidebar: React.FC<SettingsSidebarProps> = ({
               </p>
             ) : (
               apiKeys.map((key) => {
+                const isSelected = selectedKeyId === key.id;
                 const isActive = getActiveApiKey() === key.key;
                 return (
                   <div
                     key={key.id}
                     className={`p-2 rounded-md border ${
-                      isActive
+                      isSelected
                         ? 'bg-[var(--bg-tertiary)] border-[var(--accent-blue)]'
                         : 'bg-[var(--bg-primary)] border-[var(--border-color)]'
                     }`}
@@ -479,9 +552,9 @@ export const SettingsSidebar: React.FC<SettingsSidebarProps> = ({
                         <span className="text-sm text-[var(--text-primary)] truncate">
                           {key.name}
                         </span>
-                        {isActive && (
+                        {isSelected && (
                           <span className="text-xs bg-[var(--accent-blue)] text-white px-1.5 py-0.5 rounded">
-                            사용 중
+                            선택됨
                           </span>
                         )}
                         {key.quotaExceeded && (
@@ -510,7 +583,7 @@ export const SettingsSidebar: React.FC<SettingsSidebarProps> = ({
           </div>
           
           <p className="text-xs text-[var(--text-tertiary)] mt-2 px-2">
-            할당량 초과 시 자동으로 다른 활성 API 키로 전환됩니다
+            선택한 키가 우선 사용됩니다. 할당량 초과 시 자동으로 다른 활성 키로 전환됩니다
           </p>
         </div>
 
