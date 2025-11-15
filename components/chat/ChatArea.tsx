@@ -17,6 +17,8 @@ interface ChatAreaProps {
   onInputChange: (input: string) => void;
   onSend: () => void;
   onEditMessage?: (index: number, newContent: string) => void;
+  onLoadPreviousMessages?: () => void;
+  hasMoreMessages?: boolean;
 }
 
 export const ChatArea: React.FC<ChatAreaProps> = ({
@@ -31,17 +33,42 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
   onInputChange,
   onSend,
   onEditMessage,
+  onLoadPreviousMessages,
+  hasMoreMessages = false,
 }) => {
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [isEditingTitle, setIsEditingTitle] = React.useState(false);
   const [tempTitle, setTempTitle] = React.useState(title);
   const [streamingContent, setStreamingContent] = React.useState<{ [key: number]: string }>({});
   const [editingMessageIndex, setEditingMessageIndex] = React.useState<number | null>(null);
+  const [showLoadPreviousButton, setShowLoadPreviousButton] = React.useState(false);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, streamingContent]);
+
+  // 스크롤 감지 로직
+  useEffect(() => {
+    const container = messagesContainerRef.current;
+    if (!container || !hasMoreMessages) {
+      setShowLoadPreviousButton(false);
+      return;
+    }
+    
+    const handleScroll = () => {
+      // 상단에서 100px 이내에 있으면 버튼 표시
+      const isNearTop = container.scrollTop < 100;
+      setShowLoadPreviousButton(isNearTop);
+    };
+    
+    container.addEventListener('scroll', handleScroll);
+    // 초기 체크
+    handleScroll();
+    
+    return () => container.removeEventListener('scroll', handleScroll);
+  }, [hasMoreMessages]);
 
   useEffect(() => {
     setTempTitle(title);
@@ -137,7 +164,38 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
       </div>
 
       {/* 메시지 영역 */}
-      <div className="flex-1 overflow-y-auto px-6 py-4">
+      <div 
+        ref={messagesContainerRef}
+        className="flex-1 overflow-y-auto px-6 py-4"
+      >
+        {/* 이전 대화 보기 버튼 */}
+        {showLoadPreviousButton && onLoadPreviousMessages && hasMoreMessages && (
+          <div className="flex justify-center mb-4 sticky top-0 z-10">
+            <button
+              onClick={() => {
+                // 스크롤 위치 저장
+                const container = messagesContainerRef.current;
+                const scrollHeight = container?.scrollHeight || 0;
+                
+                // 이전 메시지 로드
+                onLoadPreviousMessages();
+                
+                // 스크롤 위치 유지 (다음 프레임에서)
+                setTimeout(() => {
+                  if (container) {
+                    const newScrollHeight = container.scrollHeight;
+                    const heightDiff = newScrollHeight - scrollHeight;
+                    container.scrollTop = heightDiff;
+                  }
+                }, 0);
+              }}
+              className="px-4 py-2 bg-[var(--bg-tertiary)] hover:bg-[var(--bg-hover)] text-[var(--text-primary)] rounded-md text-sm font-medium border border-[var(--border-color)] transition-colors shadow-sm"
+            >
+              이전 대화 보기 (10개)
+            </button>
+          </div>
+        )}
+        
         {messages.length === 0 ? (
           <div className="h-full flex items-center justify-center">
             <div className="text-center">

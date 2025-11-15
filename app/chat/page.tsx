@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Sidebar } from '@/components/chat/Sidebar';
 import { ChatArea } from '@/components/chat/ChatArea';
 import { SettingsSidebar } from '@/components/chat/SettingsSidebar';
@@ -10,19 +10,27 @@ import { loadCharacters, initializeDefaultCharacters } from '@/lib/storage/chara
 import { loadSettings, saveSettings, type OutputSpeed, type MaxOutputTokens, type ThinkingBudget, type MaxActiveLorebooks } from '@/lib/storage/settings';
 import { loadLorebooks, detectKeywords } from '@/lib/storage/lorebook';
 import {
-  loadChatHistories,
+  loadChatHistorySummaries,
+  loadChatHistoryById,
+  loadChatHistoryMessages,
   saveChatHistory,
   deleteChatHistory,
   updateChatHistory,
   createNewChatHistory,
   generateChatTitle,
   type ChatHistory,
+  type ChatHistorySummary,
 } from '@/lib/storage/chatHistory';
 
 export default function ChatPage() {
-  const [histories, setHistories] = useState<ChatHistory[]>([]);
+  // 히스토리 목록은 메타데이터만 저장 (메모리 최적화)
+  const [histories, setHistories] = useState<ChatHistorySummary[]>([]);
   const [characters, setCharacters] = useState<Character[]>([]);
+  // 현재 선택된 히스토리만 전체 데이터 로드
   const [currentHistory, setCurrentHistory] = useState<ChatHistory | null>(null);
+  // 메시지 로딩 상태 관리
+  const [loadedMessageStartIndex, setLoadedMessageStartIndex] = useState(0);
+  const [hasMoreMessages, setHasMoreMessages] = useState(false);
   const [currentCharacter, setCurrentCharacter] = useState<Character | null>(null);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -45,14 +53,31 @@ export default function ChatPage() {
     // API 키는 설정 UI에서 수동으로 추가하거나, 환경 변수로 관리
     // 보안을 위해 코드에 하드코딩하지 않음
     
-    const loaded = loadChatHistories();
-    setHistories(loaded);
+    // 히스토리 목록은 메타데이터만 로드 (메모리 최적화)
+    const loadedSummaries = loadChatHistorySummaries();
+    setHistories(loadedSummaries);
     
-    if (loaded.length > 0) {
-      setCurrentHistory(loaded[0]);
+    if (loadedSummaries.length > 0) {
+      // 첫 번째 히스토리의 최근 10개 메시지만 로드
+      const firstSummary = loadedSummaries[0];
+      const firstHistory: ChatHistory = {
+        ...firstSummary,
+        messages: firstSummary.recentMessages,
+        contextSummary: undefined,
+        lastSummaryAt: undefined,
+        userNote: undefined,
+      };
+      setCurrentHistory(firstHistory);
+      
+      // 로딩 상태 초기화
+      const startIndex = Math.max(0, firstSummary.messageCount - 10);
+      setLoadedMessageStartIndex(startIndex);
+      setHasMoreMessages(startIndex > 0);
     } else {
       const newChat = createNewChatHistory();
       setCurrentHistory(newChat);
+      setLoadedMessageStartIndex(0);
+      setHasMoreMessages(false);
     }
   }, []);
 
@@ -82,13 +107,20 @@ export default function ChatPage() {
     }
   };
 
-  // 현재 대화 저장
+  // 현재 대화 저장 (최적화: 목록만 업데이트, 디바운싱)
   useEffect(() => {
-    if (currentHistory && currentHistory.messages.length > 0) {
+    if (!currentHistory || currentHistory.messages.length === 0) return;
+    
+    // 디바운싱: 500ms 후에 저장 (빠른 연속 업데이트 방지)
+    const timeoutId = setTimeout(() => {
       saveChatHistory(currentHistory);
-      setHistories(loadChatHistories());
-    }
-  }, [currentHistory]);
+      // 히스토리 목록만 업데이트 (메타데이터만)
+      const updatedSummaries = loadChatHistorySummaries();
+      setHistories(updatedSummaries);
+    }, 500);
+    
+    return () => clearTimeout(timeoutId);
+  }, [currentHistory?.id, currentHistory?.title, currentHistory?.updatedAt, currentHistory?.messages.length]);
 
   // 새 대화 시작
   const handleNewChat = () => {
@@ -100,17 +132,37 @@ export default function ChatPage() {
     setCurrentHistory(newChat);
     setCurrentCharacter(null);
     saveChatHistory(newChat);
-    setHistories(loadChatHistories());
+    // 히스토리 목록만 업데이트 (메타데이터만)
+    setHistories(loadChatHistorySummaries());
+    // 로딩 상태 초기화
+    setLoadedMessageStartIndex(0);
+    setHasMoreMessages(false);
   };
 
-  // 대화 선택
+  // 대화 선택 (최근 10개 메시지만 로드)
   const handleSelectHistory = (id: string) => {
-    const history = histories.find(h => h.id === id);
-    if (history) {
+    const summary = histories.find(h => h.id === id);
+    
+    if (summary) {
+      // 최근 10개 메시지만 로드
+      const recentMessages = summary.recentMessages;
+      const history: ChatHistory = {
+        ...summary,
+        messages: recentMessages,
+        contextSummary: undefined,
+        lastSummaryAt: undefined,
+        userNote: undefined,
+      };
       setCurrentHistory(history);
+      
+      // 로딩 상태 초기화
+      const startIndex = Math.max(0, summary.messageCount - 10);
+      setLoadedMessageStartIndex(startIndex);
+      setHasMoreMessages(startIndex > 0);
+      
       // 선택한 대화의 캐릭터 찾기
-      if (history.characterName) {
-        const matched = characters.find(c => c.name === history.characterName);
+      if (summary.characterName) {
+        const matched = characters.find(c => c.name === summary.characterName);
         setCurrentCharacter(matched || null);
       }
     }
@@ -119,16 +171,33 @@ export default function ChatPage() {
   // 대화 삭제
   const handleDeleteHistory = (id: string) => {
     deleteChatHistory(id);
-    const updated = loadChatHistories();
+    // 히스토리 목록만 업데이트 (메타데이터만)
+    const updated = loadChatHistorySummaries();
     setHistories(updated);
     
     if (currentHistory?.id === id) {
       if (updated.length > 0) {
-        setCurrentHistory(updated[0]);
+        // 삭제 후 첫 번째 히스토리의 최근 10개 메시지만 로드
+        const firstSummary = updated[0];
+        const firstHistory: ChatHistory = {
+          ...firstSummary,
+          messages: firstSummary.recentMessages,
+          contextSummary: undefined,
+          lastSummaryAt: undefined,
+          userNote: undefined,
+        };
+        setCurrentHistory(firstHistory);
+        
+        // 로딩 상태 초기화
+        const startIndex = Math.max(0, firstSummary.messageCount - 10);
+        setLoadedMessageStartIndex(startIndex);
+        setHasMoreMessages(startIndex > 0);
       } else {
         const newChat = createNewChatHistory();
         setCurrentHistory(newChat);
         setCurrentCharacter(null);
+        setLoadedMessageStartIndex(0);
+        setHasMoreMessages(false);
       }
     }
   };
@@ -147,7 +216,8 @@ export default function ChatPage() {
       
       // 즉시 저장
       saveChatHistory(updated);
-      setHistories(loadChatHistories());
+      // 히스토리 목록만 업데이트 (메타데이터만)
+      setHistories(loadChatHistorySummaries());
     }
   };
 
@@ -209,7 +279,13 @@ export default function ChatPage() {
       content: input.trim(),
     };
 
-    const newMessages = [...currentHistory.messages, userMessage];
+    // localStorage에서 전체 히스토리를 가져와서 전체 메시지 배열 생성
+    const fullHistory = loadChatHistoryById(currentHistory.id);
+    const allMessages = fullHistory 
+      ? [...fullHistory.messages, userMessage]
+      : [...currentHistory.messages, userMessage];
+    
+    const newMessages = allMessages;
     
     // 10턴(20개 메시지)마다 자동 요약 트리거
     const TURNS_THRESHOLD = 10;
@@ -238,17 +314,37 @@ export default function ChatPage() {
       content: l.content,
     }));
     
-    // 사용자 메시지 추가 (함수형 업데이트 사용)
+    // 사용자 메시지 추가 (최근 10개만 메모리에 유지)
     setCurrentHistory((prev) => {
       if (!prev) return prev;
-      return {
+      
+      // localStorage에 전체 저장할 히스토리 (전체 메시지 포함)
+      const fullHistory: ChatHistory = {
         ...prev,
         messages: newMessages,
         title: prev.messages.length === 0 
           ? generateChatTitle(newMessages)
           : prev.title,
       };
+      
+      // localStorage에 전체 저장
+      saveChatHistory(fullHistory);
+      
+      // 메모리에는 최근 10개만 유지
+      const recentMessages = newMessages.slice(-10);
+      return {
+        ...prev,
+        messages: recentMessages,
+        title: fullHistory.title,
+      };
     });
+    
+    // loadedMessageStartIndex 업데이트
+    setLoadedMessageStartIndex((prev) => {
+      const totalMessages = (currentHistory?.messages.length || 0) + 1;
+      return Math.max(0, totalMessages - 10);
+    });
+    
     setInput('');
     setIsLoading(true);
 
@@ -344,14 +440,47 @@ export default function ChatPage() {
         content: data.message,
       };
 
-      // 상태 업데이트: 함수형 업데이트 사용하여 최신 상태 보장
+      // 응답 메시지 추가 (최근 10개만 메모리에 유지)
       setCurrentHistory((prev) => {
         if (!prev) return prev;
-        // prev.messages에 이미 사용자 메시지가 포함되어 있으므로 assistant 메시지만 추가
+        
+        // localStorage에서 전체 히스토리를 가져와서 전체 메시지 배열 생성
+        const fullHistory = loadChatHistoryById(prev.id);
+        const allMessages = fullHistory
+          ? [...fullHistory.messages, assistantMessage]
+          : [...prev.messages, assistantMessage];
+        
+        // localStorage에 전체 저장
+        const updatedHistory: ChatHistory = {
+          ...prev,
+          messages: allMessages,
+        };
+        saveChatHistory(updatedHistory);
+        
+        // 메모리에는 최근 10개만 유지
+        const recentMessages = allMessages.slice(-10);
         return {
           ...prev,
-          messages: [...prev.messages, assistantMessage],
+          messages: recentMessages,
         };
+      });
+      
+      // loadedMessageStartIndex 업데이트
+      setLoadedMessageStartIndex((prev) => {
+        const fullHistory = currentHistory ? loadChatHistoryById(currentHistory.id) : null;
+        const totalMessages = fullHistory 
+          ? fullHistory.messages.length + 1 // assistant 메시지 추가
+          : (currentHistory?.messages.length || 0) + 1;
+        return Math.max(0, totalMessages - 10);
+      });
+      
+      // hasMoreMessages 업데이트
+      setHasMoreMessages(() => {
+        const fullHistory = currentHistory ? loadChatHistoryById(currentHistory.id) : null;
+        const totalMessages = fullHistory 
+          ? fullHistory.messages.length + 1
+          : (currentHistory?.messages.length || 0) + 1;
+        return totalMessages > 10;
       });
     } catch (error) {
       console.error('Chat error:', error);
@@ -412,12 +541,39 @@ export default function ChatPage() {
     saveSettings({ ...settings, maxActiveLorebooks: max });
   };
 
+  // 이전 메시지 로드 함수
+  const handleLoadPreviousMessages = useCallback(() => {
+    if (!currentHistory || !hasMoreMessages) return;
+    
+    const previousStartIndex = Math.max(0, loadedMessageStartIndex - 10);
+    const previousMessages = loadChatHistoryMessages(
+      currentHistory.id,
+      previousStartIndex,
+      10
+    );
+    
+    if (previousMessages.length > 0) {
+      // 이전 메시지를 현재 메시지 앞에 추가
+      setCurrentHistory((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          messages: [...previousMessages, ...prev.messages],
+        };
+      });
+      
+      setLoadedMessageStartIndex(previousStartIndex);
+      setHasMoreMessages(previousStartIndex > 0);
+    }
+  }, [currentHistory, loadedMessageStartIndex, hasMoreMessages]);
+
   const handleTitleChange = (title: string) => {
     if (currentHistory) {
       const updated = { ...currentHistory, title };
       setCurrentHistory(updated);
       updateChatHistory(currentHistory.id, { title });
-      setHistories(loadChatHistories());
+      // 히스토리 목록만 업데이트 (메타데이터만)
+      setHistories(loadChatHistorySummaries());
     }
   };
 
@@ -493,6 +649,8 @@ export default function ChatPage() {
         onInputChange={setInput}
         onSend={handleSend}
         onEditMessage={handleEditMessage}
+        onLoadPreviousMessages={handleLoadPreviousMessages}
+        hasMoreMessages={hasMoreMessages}
       />
 
       {/* 오른쪽 설정 사이드바 */}

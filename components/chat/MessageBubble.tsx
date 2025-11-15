@@ -6,7 +6,7 @@ import remarkGfm from 'remark-gfm';
 import rehypeRaw from 'rehype-raw';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
-import { Edit, Check, X } from 'lucide-react';
+import { Edit, Check, X, Copy } from 'lucide-react';
 
 interface MessageBubbleProps {
   content: string;
@@ -27,6 +27,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
   const [expandedImage, setExpandedImage] = useState<string | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [editedContent, setEditedContent] = useState(content);
+  const [copied, setCopied] = useState(false);
 
   const handleImageError = (src: string) => {
     setImageErrors((prev) => new Set(prev).add(src));
@@ -58,6 +59,31 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
     onEditingChange?.(false);
   };
 
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(content);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000); // 2초 후 복사 완료 표시 제거
+    } catch (error) {
+      console.error('복사 실패:', error);
+      // 폴백: 텍스트 영역에 복사
+      try {
+        const textArea = document.createElement('textarea');
+        textArea.value = content;
+        textArea.style.position = 'fixed';
+        textArea.style.opacity = '0';
+        document.body.appendChild(textArea);
+        textArea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textArea);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+      } catch (fallbackError) {
+        console.error('폴백 복사도 실패:', fallbackError);
+      }
+    }
+  };
+
   return (
     <>
       {!isEditing && (
@@ -65,15 +91,28 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
           <div className="text-xs font-medium opacity-70">
             {isUser ? '나' : characterName}
           </div>
-          {onEdit && (
+          <div className="flex items-center gap-1">
             <button
-              onClick={handleEdit}
+              onClick={handleCopy}
               className="opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:bg-[var(--bg-tertiary)] rounded"
-              title="수정"
+              title={copied ? '복사됨!' : '복사'}
             >
-              <Edit size={14} />
+              {copied ? (
+                <Check size={14} className="text-green-500" />
+              ) : (
+                <Copy size={14} />
+              )}
             </button>
-          )}
+            {onEdit && (
+              <button
+                onClick={handleEdit}
+                className="opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:bg-[var(--bg-tertiary)] rounded"
+                title="수정"
+              >
+                <Edit size={14} />
+              </button>
+            )}
+          </div>
         </div>
       )}
       

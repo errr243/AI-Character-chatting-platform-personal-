@@ -21,6 +21,22 @@ export function generateId(): string {
   return `chat_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 }
 
+// 히스토리 목록만 로드 (최근 10개 메시지만 포함하여 메모리 절약)
+export interface ChatHistorySummary {
+  id: string;
+  title: string;
+  characterName: string;
+  characterPersonality: string;
+  model: 'gemini-flash' | 'gemini-pro';
+  createdAt: number;
+  updatedAt: number;
+  messageCount: number; // 전체 메시지 개수
+  recentMessages: Array<{ // 최근 10개 메시지만 (미리보기용)
+    role: 'user' | 'assistant';
+    content: string;
+  }>;
+}
+
 export function loadChatHistories(): ChatHistory[] {
   if (typeof window === 'undefined') return [];
   
@@ -32,6 +48,89 @@ export function loadChatHistories(): ChatHistory[] {
     return histories.sort((a, b) => b.updatedAt - a.updatedAt);
   } catch (error) {
     console.error('Failed to load chat histories:', error);
+    return [];
+  }
+}
+
+// 히스토리 목록만 로드 (최근 10개 메시지만 포함) - 메모리 최적화
+const MAX_VISIBLE_HISTORIES = 10;
+const MAX_RECENT_MESSAGES = 10;
+
+export function loadChatHistorySummaries(): ChatHistorySummary[] {
+  if (typeof window === 'undefined') return [];
+  
+  try {
+    const stored = localStorage.getItem(STORAGE_KEY);
+    if (!stored) return [];
+    
+    const histories = JSON.parse(stored) as ChatHistory[];
+    
+    // 최근 10개 히스토리만 반환 (나머지는 숨김)
+    const sorted = histories.sort((a, b) => b.updatedAt - a.updatedAt);
+    const totalCount = sorted.length;
+    const visibleHistories = sorted.slice(0, MAX_VISIBLE_HISTORIES);
+    
+    // 디버깅: 실제로 10개만 반환하는지 확인
+    if (totalCount > MAX_VISIBLE_HISTORIES) {
+      console.log(`[ChatHistory] Total histories: ${totalCount}, Showing only: ${visibleHistories.length}`);
+    }
+    
+    // 최근 10개 메시지만 포함하여 반환
+    return visibleHistories.map(h => ({
+      id: h.id,
+      title: h.title,
+      characterName: h.characterName,
+      characterPersonality: h.characterPersonality,
+      model: h.model,
+      createdAt: h.createdAt,
+      updatedAt: h.updatedAt,
+      messageCount: h.messages.length,
+      // 최근 10개 메시지만 포함 (뒤에서부터)
+      recentMessages: h.messages.slice(-MAX_RECENT_MESSAGES),
+    }));
+  } catch (error) {
+    console.error('Failed to load chat history summaries:', error);
+    return [];
+  }
+}
+
+// 특정 히스토리만 로드 (메시지 포함)
+export function loadChatHistoryById(id: string): ChatHistory | null {
+  if (typeof window === 'undefined') return null;
+  
+  try {
+    const stored = localStorage.getItem(STORAGE_KEY);
+    if (!stored) return null;
+    
+    const histories = JSON.parse(stored) as ChatHistory[];
+    return histories.find(h => h.id === id) || null;
+  } catch (error) {
+    console.error('Failed to load chat history:', error);
+    return null;
+  }
+}
+
+// 특정 히스토리의 메시지 범위만 로드 (페이지네이션)
+export function loadChatHistoryMessages(
+  id: string,
+  startIndex: number = 0,
+  count: number = 10
+): Array<{ role: 'user' | 'assistant'; content: string }> {
+  if (typeof window === 'undefined') return [];
+  
+  try {
+    const stored = localStorage.getItem(STORAGE_KEY);
+    if (!stored) return [];
+    
+    const histories = JSON.parse(stored) as ChatHistory[];
+    const history = histories.find(h => h.id === id);
+    
+    if (!history) return [];
+    
+    // startIndex부터 count개만 반환
+    return history.messages.slice(startIndex, startIndex + count);
+  } catch (error) {
+    console.error('Failed to load chat history messages:', error);
     return [];
   }
 }

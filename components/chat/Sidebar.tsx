@@ -4,11 +4,11 @@ import React from 'react';
 import { Plus, Users, History, Settings } from 'lucide-react';
 import Link from 'next/link';
 import { ChatHistoryItem } from './ChatHistoryItem';
-import type { ChatHistory } from '@/lib/storage/chatHistory';
+import type { ChatHistorySummary } from '@/lib/storage/chatHistory';
 import type { Character } from '@/lib/gemini/types';
 
 interface SidebarProps {
-  histories: ChatHistory[];
+  histories: ChatHistorySummary[];
   characters: Character[];
   currentHistoryId: string | null;
   currentCharacterId: string | null;
