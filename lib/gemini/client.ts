@@ -76,12 +76,23 @@ Translate the following text:`;
       } catch (error: any) {
         lastError = error;
         
-        // 503 에러나 rate limit 에러인 경우에만 재시도
+        // 429 (quota exceeded) 오류는 재시도하지 않고 바로 throw
+        // API 라우트에서 다른 키로 전환하도록 함
+        const isQuotaExceeded = 
+          error?.message?.includes('429') ||
+          error?.message?.includes('quota') ||
+          error?.message?.includes('Quota exceeded');
+        
+        if (isQuotaExceeded) {
+          console.log('⚠️ 할당량 초과 오류 감지, 재시도하지 않고 상위로 전달');
+          throw error; // 즉시 throw하여 API 라우트에서 다른 키로 전환하도록 함
+        }
+        
+        // 503 에러나 일시적인 오류인 경우에만 재시도
         const isRetryable = 
           error?.message?.includes('503') ||
           error?.message?.includes('overloaded') ||
-          error?.message?.includes('rate limit') ||
-          error?.message?.includes('429');
+          (error?.message?.includes('rate limit') && !error?.message?.includes('429'));
 
         if (!isRetryable || attempt === maxRetries - 1) {
           throw error;

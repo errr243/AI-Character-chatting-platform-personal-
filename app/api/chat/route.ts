@@ -18,14 +18,14 @@ export async function POST(request: NextRequest) {
     console.log('Has custom API key:', !!apiKey);
     
     // 환경 변수에서 사용 가능한 API 키 개수 확인
-    const envKeysCount = [
+    const allEnvKeys = [
       process.env.GOOGLE_GEMINI_API_KEY,
       process.env.GOOGLE_GEMINI_API_KEY_2,
       process.env.GOOGLE_GEMINI_API_KEY_3,
       process.env.GOOGLE_GEMINI_API_KEY_4,
       process.env.GOOGLE_GEMINI_API_KEY_5,
-    ].filter(Boolean).length;
-    console.log(`📊 환경 변수에서 ${envKeysCount}개의 API 키를 찾았습니다.`);
+    ].filter(Boolean) as string[];
+    console.log(`📊 환경 변수에서 ${allEnvKeys.length}개의 API 키를 찾았습니다.`);
 
     if (!messages || !Array.isArray(messages) || messages.length === 0) {
       return NextResponse.json(
@@ -49,19 +49,10 @@ export async function POST(request: NextRequest) {
     let selectedApiKey = apiKey;
     
     if (!selectedApiKey) {
-      // 환경 변수에서 API 키 찾기 (여러 개 지원)
-      const envKeys = [
-        process.env.GOOGLE_GEMINI_API_KEY,
-        process.env.GOOGLE_GEMINI_API_KEY_2,
-        process.env.GOOGLE_GEMINI_API_KEY_3,
-        process.env.GOOGLE_GEMINI_API_KEY_4,
-        process.env.GOOGLE_GEMINI_API_KEY_5,
-      ].filter(Boolean) as string[];
-      
-      if (envKeys.length > 0) {
+      if (allEnvKeys.length > 0) {
         // 첫 번째 키 사용 (로테이션은 나중에 구현 가능)
-        selectedApiKey = envKeys[0];
-        console.log(`🔑 환경 변수에서 API 키 선택: ${envKeys.length}개 중 첫 번째 키 사용`);
+        selectedApiKey = allEnvKeys[0];
+        console.log(`🔑 환경 변수에서 API 키 선택: ${allEnvKeys.length}개 중 첫 번째 키 사용`);
       } else {
         console.warn('⚠️ 환경 변수에서 API 키를 찾을 수 없습니다.');
       }
@@ -94,22 +85,19 @@ export async function POST(request: NextRequest) {
       });
     } catch (error: any) {
       // 429 오류 발생 시 다른 API 키로 재시도
-      if (error?.message?.includes('429') || error?.message?.includes('quota')) {
+      if (error?.message?.includes('429') || error?.message?.includes('quota') || error?.message?.includes('Quota exceeded')) {
         console.log('⚠️ 할당량 초과 오류 발생, 다른 API 키로 전환 시도...');
-        
-        // 모든 환경 변수 키 가져오기 (첫 번째 키 제외)
-        const allEnvKeys = [
-          process.env.GOOGLE_GEMINI_API_KEY,
-          process.env.GOOGLE_GEMINI_API_KEY_2,
-          process.env.GOOGLE_GEMINI_API_KEY_3,
-          process.env.GOOGLE_GEMINI_API_KEY_4,
-          process.env.GOOGLE_GEMINI_API_KEY_5,
-        ].filter(Boolean) as string[];
+        console.log(`현재 사용 중인 키: ${selectedApiKey?.substring(0, 10)}...`);
         
         // 현재 사용한 키를 제외한 나머지 키들
         const fallbackKeys = allEnvKeys.filter(key => key !== selectedApiKey);
         
         console.log(`🔄 ${fallbackKeys.length}개의 대체 API 키로 재시도 중...`);
+        
+        if (fallbackKeys.length === 0) {
+          console.error('❌ 사용 가능한 대체 API 키가 없습니다.');
+          throw error;
+        }
 
         for (let i = 0; i < fallbackKeys.length; i++) {
           const fallbackKey = fallbackKeys[i];
