@@ -743,7 +743,7 @@ export const SettingsSidebar: React.FC<SettingsSidebarProps> = ({
               </div>
             </div>
           )}
-          </div>
+        </div>
         )}
       </div>
 
