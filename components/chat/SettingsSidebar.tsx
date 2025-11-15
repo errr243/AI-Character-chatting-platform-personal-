@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import { Bot, PenSquare, SlidersHorizontal, Zap, MessageSquare, Brain, BookOpen, ChevronRight, FileText } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Bot, PenSquare, SlidersHorizontal, Zap, MessageSquare, Brain, BookOpen, ChevronRight, FileText, Download, Upload } from 'lucide-react';
 import { loadSettings, saveSettings, type OutputSpeed, type MaxOutputTokens, type ThinkingBudget } from '@/lib/storage/settings';
 import { MemoryModal } from './MemoryModal';
 
@@ -46,6 +46,7 @@ export const SettingsSidebar: React.FC<SettingsSidebarProps> = ({
 }) => {
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [showMemoryModal, setShowMemoryModal] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const settings = loadSettings();
@@ -70,6 +71,81 @@ export const SettingsSidebar: React.FC<SettingsSidebarProps> = ({
     onThinkingBudgetChange(budget);
     const settings = loadSettings();
     saveSettings({ ...settings, thinkingBudget: budget });
+  };
+
+  // 데이터 내보내기
+  const handleExportData = () => {
+    try {
+      const chatHistories = localStorage.getItem('chat_histories');
+      const chatSettings = localStorage.getItem('chat_settings');
+      const characters = localStorage.getItem('characters');
+
+      const exportData = {
+        chat_histories: chatHistories ? JSON.parse(chatHistories) : [],
+        chat_settings: chatSettings ? JSON.parse(chatSettings) : null,
+        characters: characters ? JSON.parse(characters) : [],
+        exportDate: new Date().toISOString(),
+        version: '1.0',
+      };
+
+      const dataStr = JSON.stringify(exportData, null, 2);
+      const dataBlob = new Blob([dataStr], { type: 'application/json' });
+      const url = URL.createObjectURL(dataBlob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `ai-chat-backup-${new Date().toISOString().split('T')[0]}.json`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+
+      alert('데이터 내보내기가 완료되었습니다!');
+    } catch (error) {
+      console.error('Export error:', error);
+      alert('데이터 내보내기 중 오류가 발생했습니다.');
+    }
+  };
+
+  // 데이터 가져오기
+  const handleImportData = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      try {
+        const importData = JSON.parse(event.target?.result as string);
+
+        // 데이터 검증 및 가져오기
+        if (importData.chat_histories && Array.isArray(importData.chat_histories)) {
+          localStorage.setItem('chat_histories', JSON.stringify(importData.chat_histories));
+        }
+
+        if (importData.chat_settings) {
+          localStorage.setItem('chat_settings', JSON.stringify(importData.chat_settings));
+        }
+
+        if (importData.characters && Array.isArray(importData.characters)) {
+          localStorage.setItem('characters', JSON.stringify(importData.characters));
+        }
+
+        alert('데이터 가져오기가 완료되었습니다! 페이지를 새로고침합니다.');
+        window.location.reload();
+      } catch (error) {
+        console.error('Import error:', error);
+        alert('데이터 가져오기 중 오류가 발생했습니다. 파일 형식을 확인해주세요.');
+      }
+    };
+    reader.readAsText(file);
+
+    // 파일 입력 초기화
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
   };
 
   return (
@@ -275,6 +351,39 @@ export const SettingsSidebar: React.FC<SettingsSidebarProps> = ({
               10턴(20개 메시지)마다 자동 생성됩니다
             </p>
           )}
+        </div>
+
+        {/* 데이터 백업/복원 */}
+        <div className="border-t border-[var(--border-color)] pt-4">
+          <label className="block text-sm font-semibold text-[var(--text-secondary)] mb-3">
+            데이터 관리
+          </label>
+          <div className="space-y-2">
+            <button
+              onClick={handleExportData}
+              className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-[var(--bg-tertiary)] hover:bg-[var(--bg-hover)] text-[var(--text-primary)] rounded-md text-sm font-medium transition-colors"
+            >
+              <Download size={16} />
+              데이터 내보내기
+            </button>
+            <button
+              onClick={handleImportData}
+              className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-[var(--bg-tertiary)] hover:bg-[var(--bg-hover)] text-[var(--text-primary)] rounded-md text-sm font-medium transition-colors"
+            >
+              <Upload size={16} />
+              데이터 가져오기
+            </button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".json"
+              onChange={handleFileChange}
+              className="hidden"
+            />
+          </div>
+          <p className="text-xs text-[var(--text-tertiary)] mt-2 px-2">
+            대화 기록, 설정, 캐릭터를 백업하거나 복원할 수 있습니다
+          </p>
         </div>
 
         {/* 고급 설정 (접을 수 있음) */}
