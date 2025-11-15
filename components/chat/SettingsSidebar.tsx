@@ -311,8 +311,7 @@ export const SettingsSidebar: React.FC<SettingsSidebarProps> = ({
             </button>
           </div>
         ) : (
-          <div className="space-y-6">
-
+          <>
         {/* 모델 선택 */}
         <div>
           <label className="block text-sm font-semibold text-[var(--text-secondary)] mb-2 flex items-center gap-2">
@@ -744,6 +743,7 @@ export const SettingsSidebar: React.FC<SettingsSidebarProps> = ({
             </div>
           )}
         </div>
+        </>
         )}
       </div>
 
