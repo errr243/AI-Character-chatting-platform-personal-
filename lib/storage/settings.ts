@@ -2,11 +2,13 @@ export type OutputSpeed = 'instant' | 'fast' | 'medium' | 'slow';
 
 export type MaxOutputTokens = 256 | 512 | 1024 | 2048 | 4096 | 6144 | 8192; // 토큰 수 (최소 256)
 export type ThinkingBudget = 128 | 512 | 1024 | 2048 | 32768 | -1 | undefined; // 토큰 수 (Pro: 128~32768, -1=동적), undefined는 API 기본값
+export type MaxActiveLorebooks = 3 | 5 | 8 | 10;
 
 export interface ChatSettings {
   outputSpeed: OutputSpeed;
   maxOutputTokens: MaxOutputTokens;
   thinkingBudget: ThinkingBudget;
+  maxActiveLorebooks: MaxActiveLorebooks;
 }
 
 const STORAGE_KEY = 'chat_settings';
@@ -14,6 +16,7 @@ const DEFAULT_SETTINGS: ChatSettings = {
   outputSpeed: 'instant',
   maxOutputTokens: 8192, // 제한 없음
   thinkingBudget: 1024, // 기본값: 중간 정도의 사고 품질
+  maxActiveLorebooks: 5, // 기본값: 5개
 };
 
 export function loadSettings(): ChatSettings {
@@ -51,6 +54,16 @@ export function loadSettings(): ChatSettings {
     } else {
       // thinkingBudget이 없으면 기본값 설정
       settings.thinkingBudget = 1024;
+    }
+    
+    // maxActiveLorebooks 마이그레이션
+    if (settings.maxActiveLorebooks === undefined) {
+      settings.maxActiveLorebooks = 5;
+    } else {
+      const validValues = [3, 5, 8, 10];
+      if (!validValues.includes(settings.maxActiveLorebooks)) {
+        settings.maxActiveLorebooks = 5;
+      }
     }
     
     return { ...DEFAULT_SETTINGS, ...settings };

@@ -30,6 +30,7 @@ export interface ChatRequest {
   model?: 'gemini-flash' | 'gemini-pro';
   maxOutputTokens?: number; // 최대 출력 토큰 수
   thinkingBudget?: number | -1; // Thinking budget (Pro: 128~32768, -1=동적, undefined=API 기본값)
+  activeLorebooks?: Array<{ id: string; keywords: string[]; content: string }>; // 활성화된 로어북 목록
 }
 
 export interface ChatResponse {

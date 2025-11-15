@@ -2,9 +2,10 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { Bot, PenSquare, SlidersHorizontal, Zap, MessageSquare, Brain, BookOpen, ChevronRight, FileText, Download, Upload, Key, Plus, Trash2, Check } from 'lucide-react';
-import { loadSettings, saveSettings, type OutputSpeed, type MaxOutputTokens, type ThinkingBudget } from '@/lib/storage/settings';
+import { loadSettings, saveSettings, type OutputSpeed, type MaxOutputTokens, type ThinkingBudget, type MaxActiveLorebooks } from '@/lib/storage/settings';
 import { MemoryModal } from './MemoryModal';
 import { loadApiKeys, addApiKey, deleteApiKey, updateApiKey, getActiveApiKey, setSelectedApiKeyId, getSelectedApiKeyId, type ApiKeyInfo } from '@/lib/storage/apiKeys';
+import { LorebookManager } from './LorebookManager';
 
 interface SettingsSidebarProps {
   characterName: string;
@@ -13,6 +14,7 @@ interface SettingsSidebarProps {
   outputSpeed: OutputSpeed;
   maxOutputTokens: MaxOutputTokens;
   thinkingBudget: ThinkingBudget;
+  maxActiveLorebooks: MaxActiveLorebooks;
   contextSummary?: string;
   lastSummaryAt?: number;
   totalMessages: number;
@@ -23,6 +25,7 @@ interface SettingsSidebarProps {
   onOutputSpeedChange: (speed: OutputSpeed) => void;
   onMaxOutputTokensChange: (tokens: MaxOutputTokens) => void;
   onThinkingBudgetChange: (budget: ThinkingBudget) => void;
+  onMaxActiveLorebooksChange: (max: MaxActiveLorebooks) => void;
   onUserNoteChange: (note: string) => void;
 }
 
@@ -33,6 +36,7 @@ export const SettingsSidebar: React.FC<SettingsSidebarProps> = ({
   outputSpeed,
   maxOutputTokens,
   thinkingBudget,
+  maxActiveLorebooks,
   contextSummary,
   lastSummaryAt,
   totalMessages,
@@ -43,6 +47,7 @@ export const SettingsSidebar: React.FC<SettingsSidebarProps> = ({
   onOutputSpeedChange,
   onMaxOutputTokensChange,
   onThinkingBudgetChange,
+  onMaxActiveLorebooksChange,
   onUserNoteChange,
 }) => {
   const [showAdvanced, setShowAdvanced] = useState(false);
@@ -61,6 +66,7 @@ export const SettingsSidebar: React.FC<SettingsSidebarProps> = ({
         onOutputSpeedChange(settings.outputSpeed);
         onMaxOutputTokensChange(settings.maxOutputTokens);
         onThinkingBudgetChange(settings.thinkingBudget);
+        onMaxActiveLorebooksChange(settings.maxActiveLorebooks);
         
         // API 키 목록 로드
         const keys = loadApiKeys();
@@ -432,6 +438,18 @@ export const SettingsSidebar: React.FC<SettingsSidebarProps> = ({
               10턴(20개 메시지)마다 자동 생성됩니다
             </p>
           )}
+        </div>
+
+        {/* 로어북 */}
+        <div className="border-t border-[var(--border-color)] pt-4">
+          <LorebookManager
+            maxActive={maxActiveLorebooks}
+            onMaxActiveChange={(max) => {
+              onMaxActiveLorebooksChange(max);
+              const settings = loadSettings();
+              saveSettings({ ...settings, maxActiveLorebooks: max });
+            }}
+          />
         </div>
 
         {/* API 키 관리 */}

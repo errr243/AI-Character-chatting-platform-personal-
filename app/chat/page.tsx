@@ -7,7 +7,8 @@ import { SettingsSidebar } from '@/components/chat/SettingsSidebar';
 import type { ChatMessage, Character } from '@/lib/gemini/types';
 import { buildCharacterPrompt } from '@/lib/gemini/promptBuilder';
 import { loadCharacters, initializeDefaultCharacters } from '@/lib/storage/characters';
-import { loadSettings, type OutputSpeed, type MaxOutputTokens, type ThinkingBudget } from '@/lib/storage/settings';
+import { loadSettings, saveSettings, type OutputSpeed, type MaxOutputTokens, type ThinkingBudget, type MaxActiveLorebooks } from '@/lib/storage/settings';
+import { loadLorebooks, detectKeywords } from '@/lib/storage/lorebook';
 import {
   loadChatHistories,
   saveChatHistory,
@@ -28,6 +29,7 @@ export default function ChatPage() {
   const [outputSpeed, setOutputSpeed] = useState<OutputSpeed>('instant');
   const [maxOutputTokens, setMaxOutputTokens] = useState<MaxOutputTokens>(8192);
   const [thinkingBudget, setThinkingBudget] = useState<ThinkingBudget>(undefined);
+  const [maxActiveLorebooks, setMaxActiveLorebooks] = useState<MaxActiveLorebooks>(5);
 
   // 초기 로드
   useEffect(() => {
@@ -38,6 +40,7 @@ export default function ChatPage() {
     setOutputSpeed(settings.outputSpeed);
     setMaxOutputTokens(settings.maxOutputTokens);
     setThinkingBudget(settings.thinkingBudget);
+    setMaxActiveLorebooks(settings.maxActiveLorebooks);
     
     // API 키는 설정 UI에서 수동으로 추가하거나, 환경 변수로 관리
     // 보안을 위해 코드에 하드코딩하지 않음
@@ -226,6 +229,15 @@ export default function ChatPage() {
     const MAX_TURNS = 10;
     const messagesToSend = newMessages.slice(-MAX_TURNS * 2);
     
+    // 로어북 키워드 감지
+    const allLorebooks = loadLorebooks();
+    const activeLorebooks = detectKeywords(messagesToSend, allLorebooks, maxActiveLorebooks);
+    const activeLorebooksData = activeLorebooks.map(l => ({
+      id: l.id,
+      keywords: l.keywords,
+      content: l.content,
+    }));
+    
     // 사용자 메시지 추가 (함수형 업데이트 사용)
     setCurrentHistory((prev) => {
       if (!prev) return prev;
@@ -255,6 +267,7 @@ export default function ChatPage() {
           model: currentHistory.model,
           maxOutputTokens: maxOutputTokens !== 8192 ? maxOutputTokens : undefined,
           thinkingBudget: thinkingBudget,
+          activeLorebooks: activeLorebooksData.length > 0 ? activeLorebooksData : undefined,
           // 보안: 클라이언트에서 API 키를 직접 보내는 것은 권장하지 않음
           // 가능하면 서버 사이드에서 환경 변수로 관리하는 것을 권장
           // 개발/테스트 목적으로만 클라이언트 저장 방식 사용
@@ -393,6 +406,12 @@ export default function ChatPage() {
     setThinkingBudget(budget);
   };
 
+  const handleMaxActiveLorebooksChange = (max: MaxActiveLorebooks) => {
+    setMaxActiveLorebooks(max);
+    const settings = loadSettings();
+    saveSettings({ ...settings, maxActiveLorebooks: max });
+  };
+
   const handleTitleChange = (title: string) => {
     if (currentHistory) {
       const updated = { ...currentHistory, title };
@@ -484,6 +503,7 @@ export default function ChatPage() {
         outputSpeed={outputSpeed}
         maxOutputTokens={maxOutputTokens}
         thinkingBudget={thinkingBudget}
+        maxActiveLorebooks={maxActiveLorebooks}
         contextSummary={currentHistory.contextSummary}
         lastSummaryAt={currentHistory.lastSummaryAt}
         totalMessages={currentHistory.messages.length}
@@ -494,6 +514,7 @@ export default function ChatPage() {
         onOutputSpeedChange={handleOutputSpeedChange}
         onMaxOutputTokensChange={handleMaxOutputTokensChange}
         onThinkingBudgetChange={handleThinkingBudgetChange}
+        onMaxActiveLorebooksChange={handleMaxActiveLorebooksChange}
         onUserNoteChange={handleUserNoteChange}
       />
     </div>

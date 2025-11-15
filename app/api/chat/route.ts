@@ -5,7 +5,7 @@ import type { ChatMessage } from '@/lib/gemini/types';
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { messages, characterName, characterPersonality, model, maxOutputTokens, thinkingBudget, contextSummary, userNote, apiKey } = body;
+    const { messages, characterName, characterPersonality, model, maxOutputTokens, thinkingBudget, contextSummary, userNote, activeLorebooks, apiKey } = body;
 
     console.log('=== Chat API Request ===');
     console.log('Messages count:', messages?.length);
@@ -15,6 +15,7 @@ export async function POST(request: NextRequest) {
     console.log('Thinking budget:', thinkingBudget);
     console.log('Has context summary:', !!contextSummary);
     console.log('Has user note:', !!userNote);
+    console.log('Active lorebooks:', activeLorebooks?.length || 0);
     // 보안: API 키 존재 여부만 로그 (실제 키 값은 로그하지 않음)
     console.log('Has custom API key:', !!apiKey);
     
@@ -80,6 +81,7 @@ export async function POST(request: NextRequest) {
         characterPersonality,
         contextSummary,
         userNote,
+        activeLorebooks,
         model: model || 'gemini-pro',
         maxOutputTokens,
         thinkingBudget,
@@ -116,6 +118,7 @@ export async function POST(request: NextRequest) {
               characterPersonality,
               contextSummary,
               userNote,
+              activeLorebooks,
               model: model || 'gemini-pro',
               maxOutputTokens,
               thinkingBudget,

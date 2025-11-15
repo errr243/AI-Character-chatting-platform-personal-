@@ -154,6 +154,16 @@ Translate the following text:`;
         characterContext += '\n\n(위 내용은 최근 10턴 이전의 대화 요약입니다. 참고하되 최근 대화에 집중하세요.)';
       }
       
+      // 로어북 정보 추가 (키워드 기반)
+      if (request.activeLorebooks && request.activeLorebooks.length > 0) {
+        characterContext += '\n\n[로어북 - 추가 정보]';
+        for (const lorebook of request.activeLorebooks) {
+          characterContext += `\n\n[키워드: ${lorebook.keywords.join(', ')}]`;
+          characterContext += `\n${lorebook.content}`;
+        }
+        characterContext += '\n\n(위 내용은 대화에서 언급된 키워드와 관련된 추가 설정입니다. 이를 참고하여 일관된 세계관과 캐릭터성을 유지하세요.)';
+      }
+      
       // 응답 길이 제한이 있으면 프롬프트에 추가
       if (request.maxOutputTokens && request.maxOutputTokens < 8192) {
         const tokenLimit = request.maxOutputTokens;
