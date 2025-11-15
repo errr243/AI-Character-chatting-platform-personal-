@@ -15,6 +15,7 @@ export async function POST(request: NextRequest) {
     console.log('Thinking budget:', thinkingBudget);
     console.log('Has context summary:', !!contextSummary);
     console.log('Has user note:', !!userNote);
+    // 보안: API 키 존재 여부만 로그 (실제 키 값은 로그하지 않음)
     console.log('Has custom API key:', !!apiKey);
     
     // 환경 변수에서 사용 가능한 API 키 개수 확인
@@ -87,7 +88,11 @@ export async function POST(request: NextRequest) {
       // 429 오류 발생 시 다른 API 키로 재시도
       if (error?.message?.includes('429') || error?.message?.includes('quota') || error?.message?.includes('Quota exceeded')) {
         console.log('⚠️ 할당량 초과 오류 발생, 다른 API 키로 전환 시도...');
-        console.log(`현재 사용 중인 키: ${selectedApiKey?.substring(0, 10)}...`);
+        // 보안: API 키의 일부만 로그 (처음 4자 + ... + 마지막 4자)
+        const maskedKey = selectedApiKey 
+          ? `${selectedApiKey.substring(0, 4)}...${selectedApiKey.substring(selectedApiKey.length - 4)}`
+          : '없음';
+        console.log(`현재 사용 중인 키: ${maskedKey}`);
         
         // 현재 사용한 키를 제외한 나머지 키들
         const fallbackKeys = allEnvKeys.filter(key => key !== selectedApiKey);
