@@ -15,3 +15,16 @@ out
 dist
 
 /lib/generated/prisma
+
+# System directories (prevent accidental commits from wrong directory)
+AppData/
+Android/
+.android/
+.gradle/
+.m2/
+.vscode/
+.cursor/
+.claude/
+.cache/
+.local/
+.config/
