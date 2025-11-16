@@ -1,9 +1,13 @@
 'use client';
 
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { Sidebar } from '@/components/chat/Sidebar';
 import { ChatArea } from '@/components/chat/ChatArea';
 import { SettingsSidebar } from '@/components/chat/SettingsSidebar';
+import { MobileChatArea } from '@/components/chat/MobileChatArea';
+import { MobileBottomNav } from '@/components/chat/MobileBottomNav';
+import { MobileDrawer } from '@/components/chat/MobileDrawer';
+import { MobileSettings } from '@/components/chat/MobileSettings';
 import type { ChatMessage, Character } from '@/lib/gemini/types';
 import { buildCharacterPrompt } from '@/lib/gemini/promptBuilder';
 import { loadCharacters, initializeDefaultCharacters } from '@/lib/storage/characters';
@@ -49,6 +53,10 @@ export default function ChatPage() {
     return saved ? parseInt(saved, 10) : 384;
   });
 
+  // Mobile states
+  const [mobileTab, setMobileTab] = useState<'chat' | 'characters' | 'history' | 'settings'>('chat');
+  const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
+
   // 초기 로드
   useEffect(() => {
     initializeDefaultCharacters();
@@ -68,21 +76,38 @@ export default function ChatPage() {
     setHistories(loadedSummaries);
     
     if (loadedSummaries.length > 0) {
-      // 첫 번째 히스토리의 최근 10개 메시지만 로드
+      // 첫 번째 히스토리의 전체 데이터 로드
       const firstSummary = loadedSummaries[0];
-      const firstHistory: ChatHistory = {
-        ...firstSummary,
-        messages: firstSummary.recentMessages,
-        contextSummary: undefined,
-        lastSummaryAt: undefined,
-        userNote: undefined,
-      };
-      setCurrentHistory(firstHistory);
+      const fullHistory = loadChatHistoryById(firstSummary.id);
       
-      // 로딩 상태 초기화
-      const startIndex = Math.max(0, firstSummary.messageCount - 10);
-      setLoadedMessageStartIndex(startIndex);
-      setHasMoreMessages(startIndex > 0);
+      if (fullHistory) {
+        // 최근 10개 메시지만 메모리에 유지
+        const recentMessages = fullHistory.messages.slice(-10);
+        const firstHistory: ChatHistory = {
+          ...fullHistory,
+          messages: recentMessages,
+        };
+        setCurrentHistory(firstHistory);
+        
+        // 로딩 상태 초기화
+        const startIndex = Math.max(0, fullHistory.messages.length - 10);
+        setLoadedMessageStartIndex(startIndex);
+        setHasMoreMessages(startIndex > 0);
+      } else {
+        // fallback: summary만 사용
+        const firstHistory: ChatHistory = {
+          ...firstSummary,
+          messages: firstSummary.recentMessages,
+          contextSummary: undefined,
+          lastSummaryAt: undefined,
+          userNote: undefined,
+        };
+        setCurrentHistory(firstHistory);
+        
+        const startIndex = Math.max(0, firstSummary.messageCount - 10);
+        setLoadedMessageStartIndex(startIndex);
+        setHasMoreMessages(startIndex > 0);
+      }
     } else {
       const newChat = createNewChatHistory();
       setCurrentHistory(newChat);
@@ -154,26 +179,48 @@ export default function ChatPage() {
     const summary = histories.find(h => h.id === id);
     
     if (summary) {
-      // 최근 10개 메시지만 로드
-      const recentMessages = summary.recentMessages;
-      const history: ChatHistory = {
-        ...summary,
-        messages: recentMessages,
-        contextSummary: undefined,
-        lastSummaryAt: undefined,
-        userNote: undefined,
-      };
-      setCurrentHistory(history);
+      // 전체 히스토리를 로드하여 userNote, contextSummary 등 포함
+      const fullHistory = loadChatHistoryById(id);
       
-      // 로딩 상태 초기화
-      const startIndex = Math.max(0, summary.messageCount - 10);
-      setLoadedMessageStartIndex(startIndex);
-      setHasMoreMessages(startIndex > 0);
-      
-      // 선택한 대화의 캐릭터 찾기
-      if (summary.characterName) {
-        const matched = characters.find(c => c.name === summary.characterName);
-        setCurrentCharacter(matched || null);
+      if (fullHistory) {
+        // 최근 10개 메시지만 메모리에 유지
+        const recentMessages = fullHistory.messages.slice(-10);
+        const history: ChatHistory = {
+          ...fullHistory,
+          messages: recentMessages,
+        };
+        setCurrentHistory(history);
+        
+        // 로딩 상태 초기화
+        const startIndex = Math.max(0, fullHistory.messages.length - 10);
+        setLoadedMessageStartIndex(startIndex);
+        setHasMoreMessages(startIndex > 0);
+        
+        // 선택한 대화의 캐릭터 찾기
+        if (fullHistory.characterName) {
+          const matched = characters.find(c => c.name === fullHistory.characterName);
+          setCurrentCharacter(matched || null);
+        }
+      } else {
+        // fallback: summary만 사용 (이전 동작)
+        const recentMessages = summary.recentMessages;
+        const history: ChatHistory = {
+          ...summary,
+          messages: recentMessages,
+          contextSummary: undefined,
+          lastSummaryAt: undefined,
+          userNote: undefined,
+        };
+        setCurrentHistory(history);
+        
+        const startIndex = Math.max(0, summary.messageCount - 10);
+        setLoadedMessageStartIndex(startIndex);
+        setHasMoreMessages(startIndex > 0);
+        
+        if (summary.characterName) {
+          const matched = characters.find(c => c.name === summary.characterName);
+          setCurrentCharacter(matched || null);
+        }
       }
     }
   };
@@ -187,21 +234,38 @@ export default function ChatPage() {
     
     if (currentHistory?.id === id) {
       if (updated.length > 0) {
-        // 삭제 후 첫 번째 히스토리의 최근 10개 메시지만 로드
+        // 삭제 후 첫 번째 히스토리의 전체 데이터 로드
         const firstSummary = updated[0];
-        const firstHistory: ChatHistory = {
-          ...firstSummary,
-          messages: firstSummary.recentMessages,
-          contextSummary: undefined,
-          lastSummaryAt: undefined,
-          userNote: undefined,
-        };
-        setCurrentHistory(firstHistory);
+        const fullHistory = loadChatHistoryById(firstSummary.id);
         
-        // 로딩 상태 초기화
-        const startIndex = Math.max(0, firstSummary.messageCount - 10);
-        setLoadedMessageStartIndex(startIndex);
-        setHasMoreMessages(startIndex > 0);
+        if (fullHistory) {
+          // 최근 10개 메시지만 메모리에 유지
+          const recentMessages = fullHistory.messages.slice(-10);
+          const firstHistory: ChatHistory = {
+            ...fullHistory,
+            messages: recentMessages,
+          };
+          setCurrentHistory(firstHistory);
+          
+          // 로딩 상태 초기화
+          const startIndex = Math.max(0, fullHistory.messages.length - 10);
+          setLoadedMessageStartIndex(startIndex);
+          setHasMoreMessages(startIndex > 0);
+        } else {
+          // fallback: summary만 사용
+          const firstHistory: ChatHistory = {
+            ...firstSummary,
+            messages: firstSummary.recentMessages,
+            contextSummary: undefined,
+            lastSummaryAt: undefined,
+            userNote: undefined,
+          };
+          setCurrentHistory(firstHistory);
+          
+          const startIndex = Math.max(0, firstSummary.messageCount - 10);
+          setLoadedMessageStartIndex(startIndex);
+          setHasMoreMessages(startIndex > 0);
+        }
       } else {
         const newChat = createNewChatHistory();
         setCurrentHistory(newChat);
@@ -329,23 +393,24 @@ export default function ChatPage() {
       if (!prev) return prev;
       
       // localStorage에 전체 저장할 히스토리 (전체 메시지 포함)
-      const fullHistory: ChatHistory = {
-        ...prev,
+      // fullHistory를 사용하여 userNote, contextSummary 등 모든 필드 포함
+      const fullHistoryToSave: ChatHistory = {
+        ...(fullHistory || prev), // fullHistory가 있으면 사용, 없으면 prev 사용
         messages: newMessages,
         title: prev.messages.length === 0 
           ? generateChatTitle(newMessages)
           : prev.title,
+        updatedAt: Date.now(),
       };
       
       // localStorage에 전체 저장
-      saveChatHistory(fullHistory);
+      saveChatHistory(fullHistoryToSave);
       
-      // 메모리에는 최근 10개만 유지
+      // 메모리에는 최근 10개만 유지 (userNote 등은 유지)
       const recentMessages = newMessages.slice(-10);
       return {
-        ...prev,
+        ...fullHistoryToSave,
         messages: recentMessages,
-        title: fullHistory.title,
       };
     });
     
@@ -460,17 +525,18 @@ export default function ChatPage() {
           ? [...fullHistory.messages, assistantMessage]
           : [...prev.messages, assistantMessage];
         
-        // localStorage에 전체 저장
+        // localStorage에 전체 저장 (fullHistory를 사용하여 userNote 등 모든 필드 포함)
         const updatedHistory: ChatHistory = {
-          ...prev,
+          ...(fullHistory || prev), // fullHistory가 있으면 사용, 없으면 prev 사용
           messages: allMessages,
+          updatedAt: Date.now(),
         };
         saveChatHistory(updatedHistory);
         
-        // 메모리에는 최근 10개만 유지
+        // 메모리에는 최근 10개만 유지 (userNote 등은 유지)
         const recentMessages = allMessages.slice(-10);
         return {
-          ...prev,
+          ...updatedHistory,
           messages: recentMessages,
         };
       });
@@ -634,6 +700,88 @@ export default function ChatPage() {
     }
   };
 
+  // 데이터 내보내기
+  const handleExportData = () => {
+    try {
+      const chatHistories = localStorage.getItem('chat_histories');
+      const chatSettings = localStorage.getItem('chat_settings');
+      const characters = localStorage.getItem('characters');
+      const lorebooks = localStorage.getItem('lorebooks');
+
+      const exportData = {
+        chat_histories: chatHistories ? JSON.parse(chatHistories) : [],
+        chat_settings: chatSettings ? JSON.parse(chatSettings) : null,
+        characters: characters ? JSON.parse(characters) : [],
+        lorebooks: lorebooks ? JSON.parse(lorebooks) : [],
+        exportDate: new Date().toISOString(),
+        version: '1.1',
+      };
+
+      const dataStr = JSON.stringify(exportData, null, 2);
+      const dataBlob = new Blob([dataStr], { type: 'application/json' });
+      const url = URL.createObjectURL(dataBlob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `ai-chat-backup-${new Date().toISOString().split('T')[0]}.json`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+
+      alert('데이터 내보내기가 완료되었습니다!');
+    } catch (error) {
+      console.error('Export error:', error);
+      alert('데이터 내보내기 중 오류가 발생했습니다.');
+    }
+  };
+
+  // 데이터 가져오기
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const handleImportData = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      try {
+        const importData = JSON.parse(event.target?.result as string);
+
+        // 데이터 검증 및 가져오기
+        if (importData.chat_histories && Array.isArray(importData.chat_histories)) {
+          localStorage.setItem('chat_histories', JSON.stringify(importData.chat_histories));
+        }
+
+        if (importData.chat_settings) {
+          localStorage.setItem('chat_settings', JSON.stringify(importData.chat_settings));
+        }
+
+        if (importData.characters && Array.isArray(importData.characters)) {
+          localStorage.setItem('characters', JSON.stringify(importData.characters));
+        }
+
+        if (importData.lorebooks && Array.isArray(importData.lorebooks)) {
+          localStorage.setItem('lorebooks', JSON.stringify(importData.lorebooks));
+        }
+
+        alert('데이터 가져오기가 완료되었습니다! 페이지를 새로고침합니다.');
+        window.location.reload();
+      } catch (error) {
+        console.error('Import error:', error);
+        alert('데이터 가져오기 중 오류가 발생했습니다. 파일 형식을 확인해주세요.');
+      }
+    };
+    reader.readAsText(file);
+
+    // 파일 입력 초기화
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
   // 사이드바 리사이즈
   const handleResizeStart = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -671,61 +819,195 @@ export default function ChatPage() {
   }
 
   return (
-    <div className="h-screen flex overflow-hidden">
-      {/* 왼쪽 사이드바 */}
-      <Sidebar
-        histories={histories}
-        characters={characters}
-        currentHistoryId={currentHistory.id}
-        currentCharacterId={currentCharacter?.id || null}
-        onSelectHistory={handleSelectHistory}
-        onNewChat={handleNewChat}
-        onDeleteHistory={handleDeleteHistory}
-        onLoadCharacter={handleLoadCharacter}
-      />
+    <>
+      {/* Desktop Layout */}
+      <div className="h-screen flex overflow-hidden hide-mobile">
+        {/* 왼쪽 사이드바 */}
+        <Sidebar
+          histories={histories}
+          characters={characters}
+          currentHistoryId={currentHistory.id}
+          currentCharacterId={currentCharacter?.id || null}
+          onSelectHistory={handleSelectHistory}
+          onNewChat={handleNewChat}
+          onDeleteHistory={handleDeleteHistory}
+          onLoadCharacter={handleLoadCharacter}
+        />
 
-      {/* 중앙 채팅 영역 */}
-      <ChatArea
-        title={currentHistory.title}
-        messages={currentHistory.messages}
-        input={input}
-        isLoading={isLoading}
-        characterName={currentHistory.characterName}
-        outputSpeed={outputSpeed}
-        onTitleChange={handleTitleChange}
-        onInputChange={setInput}
-        onSend={handleSend}
-        onEditMessage={handleEditMessage}
-        onLoadPreviousMessages={handleLoadPreviousMessages}
-        hasMoreMessages={hasMoreMessages}
-      />
+        {/* 중앙 채팅 영역 */}
+        <ChatArea
+          title={currentHistory.title}
+          messages={currentHistory.messages}
+          input={input}
+          isLoading={isLoading}
+          characterName={currentHistory.characterName}
+          outputSpeed={outputSpeed}
+          onTitleChange={handleTitleChange}
+          onInputChange={setInput}
+          onSend={handleSend}
+          onEditMessage={handleEditMessage}
+          onLoadPreviousMessages={handleLoadPreviousMessages}
+          hasMoreMessages={hasMoreMessages}
+        />
 
-      {/* 오른쪽 설정 사이드바 */}
-      <SettingsSidebar
-        characterName={currentHistory.characterName}
-        characterPersonality={currentHistory.characterPersonality}
-        model={currentHistory.model}
-        outputSpeed={outputSpeed}
-        maxOutputTokens={maxOutputTokens}
-        thinkingBudget={thinkingBudget}
-        maxActiveLorebooks={maxActiveLorebooks}
-        contextSummary={currentHistory.contextSummary}
-        lastSummaryAt={currentHistory.lastSummaryAt}
-        totalMessages={currentHistory.messages.length}
-        userNote={currentHistory.userNote}
-        isCollapsed={isSettingsCollapsed}
-        width={settingsWidth}
-        onCharacterNameChange={handleCharacterNameChange}
-        onCharacterPersonalityChange={handleCharacterPersonalityChange}
-        onModelChange={handleModelChange}
-        onOutputSpeedChange={handleOutputSpeedChange}
-        onMaxOutputTokensChange={handleMaxOutputTokensChange}
-        onThinkingBudgetChange={handleThinkingBudgetChange}
-        onMaxActiveLorebooksChange={handleMaxActiveLorebooksChange}
-        onUserNoteChange={handleUserNoteChange}
-        onToggle={handleToggleSettings}
-        onResizeStart={handleResizeStart}
-      />
-    </div>
+        {/* 오른쪽 설정 사이드바 */}
+        <SettingsSidebar
+          characterName={currentHistory.characterName}
+          characterPersonality={currentHistory.characterPersonality}
+          model={currentHistory.model}
+          outputSpeed={outputSpeed}
+          maxOutputTokens={maxOutputTokens}
+          thinkingBudget={thinkingBudget}
+          maxActiveLorebooks={maxActiveLorebooks}
+          contextSummary={currentHistory.contextSummary}
+          lastSummaryAt={currentHistory.lastSummaryAt}
+          totalMessages={currentHistory.messages.length}
+          userNote={currentHistory.userNote}
+          isCollapsed={isSettingsCollapsed}
+          width={settingsWidth}
+          onCharacterNameChange={handleCharacterNameChange}
+          onCharacterPersonalityChange={handleCharacterPersonalityChange}
+          onModelChange={handleModelChange}
+          onOutputSpeedChange={handleOutputSpeedChange}
+          onMaxOutputTokensChange={handleMaxOutputTokensChange}
+          onThinkingBudgetChange={handleThinkingBudgetChange}
+          onMaxActiveLorebooksChange={handleMaxActiveLorebooksChange}
+          onUserNoteChange={handleUserNoteChange}
+          onToggle={handleToggleSettings}
+          onResizeStart={handleResizeStart}
+        />
+      </div>
+
+      {/* Mobile Layout */}
+      <div className="hide-desktop">
+        {mobileTab === 'chat' && (
+          <MobileChatArea
+            title={currentHistory.title}
+            messages={currentHistory.messages}
+            input={input}
+            isLoading={isLoading}
+            characterName={currentHistory.characterName}
+            outputSpeed={outputSpeed}
+            onTitleChange={handleTitleChange}
+            onInputChange={setInput}
+            onSend={handleSend}
+            onEditMessage={handleEditMessage}
+            onLoadPreviousMessages={handleLoadPreviousMessages}
+            hasMoreMessages={hasMoreMessages}
+            onMenuOpen={() => {
+              // 메뉴 버튼 클릭 시 캐릭터 탭으로 이동하여 Drawer 열기
+              setMobileTab('characters');
+              setMobileDrawerOpen(true);
+            }}
+          />
+        )}
+
+        {/* Mobile Bottom Navigation */}
+        <MobileBottomNav
+          activeTab={mobileTab}
+          onTabChange={(tab) => {
+            setMobileTab(tab);
+            if (tab !== 'chat') {
+              setMobileDrawerOpen(true);
+            }
+          }}
+        />
+
+        {/* Mobile Drawer for Characters/History/Settings */}
+        <MobileDrawer
+          isOpen={mobileDrawerOpen || mobileTab !== 'chat'}
+          onClose={() => {
+            setMobileDrawerOpen(false);
+            setMobileTab('chat');
+          }}
+          title={
+            mobileTab === 'characters' ? '캐릭터' :
+            mobileTab === 'history' ? '대화 기록' :
+            mobileTab === 'settings' ? '설정' : '메뉴'
+          }
+        >
+          {mobileTab === 'characters' && (
+            <div className="p-5 space-y-3">
+              {characters.map((character) => (
+                <button
+                  key={character.id}
+                  onClick={() => {
+                    handleLoadCharacter(character);
+                    setMobileDrawerOpen(false);
+                    setMobileTab('chat');
+                  }}
+                  className={`w-full text-left px-5 py-4 rounded-xl text-sm font-medium transition-all duration-300 ${
+                    character.id === currentCharacter?.id
+                      ? 'bg-gradient-to-br from-[var(--accent-primary)] to-[var(--accent-secondary)] text-white shadow-md'
+                      : 'glass-card hover:border-[var(--border-hover)]'
+                  }`}
+                >
+                  <div className="font-semibold mb-1">{character.name}</div>
+                  <div className={`text-xs ${character.id === currentCharacter?.id ? 'opacity-90' : 'text-[var(--text-tertiary)]'}`}>
+                    {character.personality.slice(0, 50)}...
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
+
+          {mobileTab === 'history' && (
+            <div className="p-5 space-y-3">
+              <button
+                onClick={() => {
+                  handleNewChat();
+                  setMobileDrawerOpen(false);
+                  setMobileTab('chat');
+                }}
+                className="w-full px-5 py-3 bg-gradient-to-br from-[var(--accent-primary)] to-[var(--accent-secondary)] text-white rounded-xl text-sm font-semibold shadow-md"
+              >
+                + 새 대화
+              </button>
+              {histories.map((history) => (
+                <button
+                  key={history.id}
+                  onClick={() => {
+                    handleSelectHistory(history.id);
+                    setMobileDrawerOpen(false);
+                    setMobileTab('chat');
+                  }}
+                  className={`w-full text-left px-5 py-3.5 rounded-xl text-sm font-medium transition-all duration-300 ${
+                    history.id === currentHistory.id
+                      ? 'glass-card border-[var(--accent-primary)] bg-[var(--bg-glass-hover)]'
+                      : 'glass-card hover:border-[var(--border-hover)]'
+                  }`}
+                >
+                  {history.title}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {mobileTab === 'settings' && (
+            <>
+              <MobileSettings
+                model={currentHistory.model}
+                outputSpeed={outputSpeed}
+                maxOutputTokens={maxOutputTokens}
+                thinkingBudget={thinkingBudget}
+                onModelChange={handleModelChange}
+                onOutputSpeedChange={handleOutputSpeedChange}
+                onMaxOutputTokensChange={handleMaxOutputTokensChange}
+                onThinkingBudgetChange={handleThinkingBudgetChange}
+                onExportData={handleExportData}
+                onImportData={handleImportData}
+              />
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".json"
+                onChange={handleFileChange}
+                className="hidden"
+              />
+            </>
+          )}
+        </MobileDrawer>
+      </div>
+    </>
   );
 }

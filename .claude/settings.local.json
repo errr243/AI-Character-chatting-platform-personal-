@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx claude-plugins --help)",
+      "Bash(npx claude-plugins)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

@@ -250,15 +250,15 @@ export const SettingsSidebar: React.FC<SettingsSidebarProps> = ({
   };
 
   return (
-    <div 
-      className="bg-[var(--bg-secondary)] border-l border-[var(--border-color)] flex flex-col h-full overflow-hidden relative"
-      style={{ width: isCollapsed ? '48px' : `${width}px`, transition: isCollapsed ? 'width 0.2s' : 'none' }}
+    <div
+      className="backdrop-blur-xl bg-[var(--bg-glass)] border-l border-[var(--border-color)] flex flex-col h-full overflow-hidden relative"
+      style={{ width: isCollapsed ? '56px' : `${width}px`, transition: isCollapsed ? 'width 0.2s' : 'none' }}
     >
-      {/* 리사이즈 핸들 */}
+      {/* Modern Resize Handle */}
       {!isCollapsed && onResizeStart && (
         <div
           onMouseDown={onResizeStart}
-          className="absolute left-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-[var(--accent-blue)] transition-colors z-10"
+          className="absolute left-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-[var(--accent-primary)] transition-colors z-10"
           style={{ cursor: 'col-resize' }}
         >
           <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 opacity-0 hover:opacity-100 transition-opacity">
@@ -267,13 +267,13 @@ export const SettingsSidebar: React.FC<SettingsSidebarProps> = ({
         </div>
       )}
 
-      {/* 토글 버튼 */}
-      <div className="flex items-center justify-between p-2 border-b border-[var(--border-color)]">
-        {!isCollapsed && <h2 className="text-xl font-bold text-[var(--text-primary)]">설정</h2>}
+      {/* Modern Toggle Button */}
+      <div className="flex items-center justify-between p-5 border-b border-[var(--border-color)]">
+        {!isCollapsed && <h2 className="text-xl font-bold text-[var(--text-primary)] tracking-tight" style={{ letterSpacing: '-0.02em' }}>설정</h2>}
         {onToggle && (
           <button
             onClick={onToggle}
-            className="p-1.5 hover:bg-[var(--bg-hover)] rounded transition-colors"
+            className="p-2 hover:bg-[var(--bg-glass)] rounded-lg transition-all duration-300 hover:-translate-x-0.5"
             title={isCollapsed ? '펼치기' : '접기'}
           >
             {isCollapsed ? <ChevronLeft size={20} className="text-[var(--text-secondary)]" /> : <ChevronRight size={20} className="text-[var(--text-secondary)]" />}
@@ -281,30 +281,30 @@ export const SettingsSidebar: React.FC<SettingsSidebarProps> = ({
         )}
       </div>
 
-      <div className={`flex-1 overflow-y-auto ${isCollapsed ? 'p-2' : 'p-4'}`}>
+      <div className={`flex-1 overflow-y-auto ${isCollapsed ? 'p-3' : 'p-5'}`}>
         {isCollapsed ? (
-          <div className="space-y-4">
-            {/* 접혔을 때 아이콘 버튼들 */}
+          <div className="space-y-3">
+            {/* Modern Icon Buttons */}
             <button
               onClick={() => onModelChange(model === 'gemini-pro' ? 'gemini-flash' : 'gemini-pro')}
-              className="w-full p-2 hover:bg-[var(--bg-hover)] rounded transition-colors"
+              className="w-full p-2.5 hover:bg-[var(--bg-glass)] rounded-xl transition-all duration-300 hover:scale-110"
               title={`모델: ${model === 'gemini-pro' ? 'Gemini 2.5 Pro' : 'Gemini 2.5 Flash'}`}
             >
               <Bot size={20} className="text-[var(--text-secondary)] mx-auto" />
             </button>
             <button
               onClick={() => setShowMemoryModal(true)}
-              className="w-full p-2 hover:bg-[var(--bg-hover)] rounded transition-colors relative"
+              className="w-full p-2.5 hover:bg-[var(--bg-glass)] rounded-xl transition-all duration-300 hover:scale-110 relative"
               title="대화 메모리"
             >
               <BookOpen size={20} className="text-[var(--text-secondary)] mx-auto" />
               {contextSummary && (
-                <span className="absolute top-1 right-1 w-2 h-2 bg-[var(--accent-blue)] rounded-full" />
+                <span className="absolute top-1 right-1 w-2 h-2 bg-[var(--accent-primary)] rounded-full animate-pulse" style={{ boxShadow: '0 0 8px var(--accent-glow)' }} />
               )}
             </button>
             <button
               onClick={() => setShowAdvanced(!showAdvanced)}
-              className="w-full p-2 hover:bg-[var(--bg-hover)] rounded transition-colors"
+              className="w-full p-2.5 hover:bg-[var(--bg-glass)] rounded-xl transition-all duration-300 hover:scale-110"
               title="고급 설정"
             >
               <SlidersHorizontal size={20} className="text-[var(--text-secondary)] mx-auto" />
@@ -677,21 +677,21 @@ export const SettingsSidebar: React.FC<SettingsSidebarProps> = ({
         </div>
 
         {/* 데이터 백업/복원 */}
-        <div className="border-t border-[var(--border-color)] pt-4">
+        <div className="border-t border-[var(--border-color)] pt-5">
           <label className="block text-sm font-semibold text-[var(--text-secondary)] mb-3">
             데이터 관리
           </label>
-          <div className="space-y-2">
+          <div className="space-y-2.5">
             <button
               onClick={handleExportData}
-              className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-[var(--bg-tertiary)] hover:bg-[var(--bg-hover)] text-[var(--text-primary)] rounded-md text-sm font-medium transition-colors"
+              className="w-full flex items-center justify-center gap-2 px-5 py-2.5 bg-[var(--bg-glass)] backdrop-blur-lg border border-[var(--border-color)] text-[var(--text-primary)] rounded-xl text-sm font-semibold hover:bg-[var(--bg-glass-hover)] hover:border-[var(--border-hover)] hover:-translate-y-0.5 transition-all duration-300"
             >
               <Download size={16} />
               데이터 내보내기
             </button>
             <button
               onClick={handleImportData}
-              className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-[var(--bg-tertiary)] hover:bg-[var(--bg-hover)] text-[var(--text-primary)] rounded-md text-sm font-medium transition-colors"
+              className="w-full flex items-center justify-center gap-2 px-5 py-2.5 bg-[var(--bg-glass)] backdrop-blur-lg border border-[var(--border-color)] text-[var(--text-primary)] rounded-xl text-sm font-semibold hover:bg-[var(--bg-glass-hover)] hover:border-[var(--border-hover)] hover:-translate-y-0.5 transition-all duration-300"
             >
               <Upload size={16} />
               데이터 가져오기
@@ -704,23 +704,23 @@ export const SettingsSidebar: React.FC<SettingsSidebarProps> = ({
               className="hidden"
             />
           </div>
-          <p className="text-xs text-[var(--text-tertiary)] mt-2 px-2">
+          <p className="text-xs text-[var(--text-tertiary)] mt-3 px-1 leading-relaxed">
             대화 기록(유저노트 포함), 설정, 캐릭터, 로어북을 백업하거나 복원할 수 있습니다
           </p>
         </div>
 
-        {/* 고급 설정 (접을 수 있음) */}
-        <div className="border-t border-[var(--border-color)] pt-4">
+        {/* Modern Advanced Settings Toggle */}
+        <div className="border-t border-[var(--border-color)] pt-5">
           <button
             onClick={() => setShowAdvanced(!showAdvanced)}
-            className="w-full flex items-center justify-between text-sm font-semibold text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors"
+            className="w-full flex items-center justify-between text-sm font-semibold text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors py-2 px-1 rounded-lg hover:bg-[var(--bg-glass)]"
           >
             <span className="flex items-center gap-2">
               <SlidersHorizontal size={16} />
               고급 설정
             </span>
             <svg
-              className={`w-4 h-4 transition-transform ${showAdvanced ? 'rotate-180' : ''}`}
+              className={`w-4 h-4 transition-transform duration-300 ${showAdvanced ? 'rotate-180' : ''}`}
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24"

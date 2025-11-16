@@ -29,42 +29,44 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onLoadCharacter,
 }) => {
   return (
-    <div className="w-64 bg-[var(--bg-secondary)] border-r border-[var(--border-color)] flex flex-col h-full">
-      {/* 헤더 */}
-      <div className="p-4 border-b border-[var(--border-color)]">
-        <h1 className="text-lg font-bold text-[var(--text-primary)] mb-3">AI 캐릭터 채팅</h1>
+    <div className="w-72 backdrop-blur-xl bg-[var(--bg-glass)] border-r border-[var(--border-color)] flex flex-col h-full">
+      {/* Modern Header */}
+      <div className="p-5 border-b border-[var(--border-color)]">
+        <h1 className="text-xl font-bold text-[var(--text-primary)] mb-4 tracking-tight" style={{ letterSpacing: '-0.02em' }}>
+          AI 캐릭터 채팅
+        </h1>
         <button
           onClick={onNewChat}
-          className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-[var(--accent-blue)] hover:bg-[var(--accent-blue-hover)] text-white rounded-md text-sm font-medium transition-colors"
+          className="w-full flex items-center justify-center gap-2 px-5 py-3 bg-gradient-to-br from-[var(--accent-primary)] to-[var(--accent-secondary)] text-white rounded-xl text-sm font-semibold shadow-[0_4px_16px_var(--accent-glow)] hover:shadow-[0_6px_24px_var(--accent-glow)] hover:-translate-y-0.5 transition-all duration-300"
         >
-          <Plus size={16} />
+          <Plus size={18} strokeWidth={2.5} />
           새 대화
         </button>
       </div>
 
-      {/* 캐릭터 섹션 - 항상 표시 */}
-      <div className="p-3 border-b border-[var(--border-color)]">
-        <div className="flex items-center justify-between mb-2">
-          <div className="flex items-center gap-2 text-xs font-medium text-[var(--text-tertiary)]">
+      {/* Modern Character Section */}
+      <div className="p-4 border-b border-[var(--border-color)]">
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2 text-xs font-semibold text-[var(--text-tertiary)] uppercase tracking-wide">
             <Users size={14} />
             캐릭터
           </div>
           <Link href="/characters">
-            <button className="text-xs text-[var(--accent-blue)] hover:text-[var(--accent-blue-hover)] transition-colors">
+            <button className="text-xs text-[var(--accent-primary)] hover:text-[var(--accent-secondary)] transition-colors font-medium">
               관리
             </button>
           </Link>
         </div>
-        <div className="space-y-1 max-h-48 overflow-y-auto">
+        <div className="space-y-2 max-h-48 overflow-y-auto">
           {characters.length > 0 ? (
             characters.map((character) => (
               <button
                 key={character.id}
                 onClick={() => onLoadCharacter(character)}
-                className={`w-full text-left px-3 py-2 rounded-md text-sm transition-colors ${
+                className={`w-full text-left px-4 py-2.5 rounded-lg text-sm font-medium transition-all duration-300 ${
                   character.id === currentCharacterId
-                    ? 'bg-[var(--accent-blue)] text-white'
-                    : 'bg-[var(--bg-primary)] text-[var(--text-primary)] hover:bg-[var(--bg-hover)]'
+                    ? 'bg-gradient-to-br from-[var(--accent-primary)] to-[var(--accent-secondary)] text-white shadow-md'
+                    : 'bg-[var(--bg-glass)] backdrop-blur-md border border-[var(--border-color)] text-[var(--text-primary)] hover:bg-[var(--bg-glass-hover)] hover:border-[var(--border-hover)] hover:-translate-y-0.5'
                 }`}
               >
                 {character.name}
@@ -72,21 +74,21 @@ export const Sidebar: React.FC<SidebarProps> = ({
             ))
           ) : (
             <Link href="/characters">
-              <button className="w-full px-3 py-2 text-xs text-[var(--accent-blue)] hover:bg-[var(--bg-hover)] rounded-md transition-colors text-center">
-                캐릭터 만들기
+              <button className="w-full px-4 py-2.5 text-xs text-[var(--accent-primary)] hover:bg-[var(--bg-glass)] rounded-lg transition-all duration-300 text-center font-medium border border-dashed border-[var(--border-color)]">
+                + 캐릭터 만들기
               </button>
             </Link>
           )}
         </div>
       </div>
 
-      {/* 히스토리 목록 */}
-      <div className="flex-1 overflow-y-auto p-3">
-        <div className="text-xs font-medium text-[var(--text-tertiary)] mb-2 flex items-center gap-2">
+      {/* Modern History List */}
+      <div className="flex-1 overflow-y-auto p-4">
+        <div className="text-xs font-semibold text-[var(--text-tertiary)] mb-3 flex items-center gap-2 uppercase tracking-wide">
           <History size={14} />
           대화 기록
         </div>
-        <div className="space-y-1">
+        <div className="space-y-2">
           {histories.map((history) => (
             <ChatHistoryItem
               key={history.id}
@@ -98,7 +100,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             />
           ))}
           {histories.length === 0 && (
-            <div className="text-sm text-[var(--text-tertiary)] px-3 py-4 text-center">
+            <div className="text-sm text-[var(--text-tertiary)] px-4 py-8 text-center font-normal">
               저장된 대화가 없습니다
             </div>
           )}
