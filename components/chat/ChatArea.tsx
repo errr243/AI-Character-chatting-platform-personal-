@@ -332,9 +332,10 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
                         : 'max-w-[85%]'
                     } ${
                       message.role === 'user'
-                        ? 'bg-gradient-to-br from-[var(--accent-primary)] to-[var(--accent-secondary)] text-white shadow-lg hover:shadow-xl rounded-xl'
+                        ? 'bg-gradient-to-br from-[var(--accent-primary)] to-[var(--accent-secondary)] text-white shadow-lg hover:shadow-xl'
                         : 'glass-card rounded-2xl'
                     }`}
+                    style={message.role === 'user' ? { borderRadius: '12px' } : undefined}
                   >
                     {message.role === 'user' ? (
                       <MessageBubble

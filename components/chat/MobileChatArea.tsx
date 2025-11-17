@@ -282,9 +282,10 @@ export const MobileChatArea: React.FC<MobileChatAreaProps> = ({
                   <div
                     className={`px-4 py-3 max-w-[85%] transition-all duration-300 ${
                       message.role === 'user'
-                        ? 'bg-gradient-to-br from-[var(--accent-primary)] to-[var(--accent-secondary)] text-white shadow-lg rounded-xl'
+                        ? 'bg-gradient-to-br from-[var(--accent-primary)] to-[var(--accent-secondary)] text-white shadow-lg'
                         : 'glass-card rounded-2xl'
                     }`}
+                    style={message.role === 'user' ? { borderRadius: '12px' } : undefined}
                   >
                     <MessageBubble
                       content={displayContent}
