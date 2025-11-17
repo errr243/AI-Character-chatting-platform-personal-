@@ -8,6 +8,7 @@ import { MobileChatArea } from '@/components/chat/MobileChatArea';
 import { MobileBottomNav } from '@/components/chat/MobileBottomNav';
 import { MobileDrawer } from '@/components/chat/MobileDrawer';
 import { MobileSettings } from '@/components/chat/MobileSettings';
+import { MemoryModal } from '@/components/chat/MemoryModal';
 import type { ChatMessage, Character } from '@/lib/gemini/types';
 import { buildCharacterPrompt } from '@/lib/gemini/promptBuilder';
 import { loadCharacters, initializeDefaultCharacters } from '@/lib/storage/characters';
@@ -58,12 +59,13 @@ export default function ChatPage() {
   // Mobile states
   const [mobileTab, setMobileTab] = useState<'chat' | 'characters' | 'history' | 'settings'>('chat');
   const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
+  const [showMemoryModal, setShowMemoryModal] = useState(false);
 
   // 초기 로드
   useEffect(() => {
     initializeDefaultCharacters();
     loadCharactersData();
-    
+
     const settings = loadSettings();
     setOutputSpeed(settings.outputSpeed);
     setMaxOutputTokens(settings.maxOutputTokens);
@@ -71,28 +73,23 @@ export default function ChatPage() {
     setMaxActiveLorebooks(settings.maxActiveLorebooks);
     setAutoScroll(settings.autoScroll);
     setUIStyle(settings.uiStyle);
-    
+
     // API 키는 설정 UI에서 수동으로 추가하거나, 환경 변수로 관리
     // 보안을 위해 코드에 하드코딩하지 않음
-    
+
     // 히스토리 목록은 메타데이터만 로드 (메모리 최적화)
     const loadedSummaries = loadChatHistorySummaries();
     setHistories(loadedSummaries);
-    
+
     if (loadedSummaries.length > 0) {
       // 첫 번째 히스토리의 전체 데이터 로드
       const firstSummary = loadedSummaries[0];
       const fullHistory = loadChatHistoryById(firstSummary.id);
-      
+
       if (fullHistory) {
-        // 최근 10개 메시지만 메모리에 유지
-        const recentMessages = fullHistory.messages.slice(-10);
-        const firstHistory: ChatHistory = {
-          ...fullHistory,
-          messages: recentMessages,
-        };
-        setCurrentHistory(firstHistory);
-        
+        // 전체 히스토리 상태로 설정 (localStorage와 동기화)
+        setCurrentHistory(fullHistory);
+
         // 로딩 상태 초기화
         const startIndex = Math.max(0, fullHistory.messages.length - 10);
         setLoadedMessageStartIndex(startIndex);
@@ -107,7 +104,7 @@ export default function ChatPage() {
           userNote: undefined,
         };
         setCurrentHistory(firstHistory);
-        
+
         const startIndex = Math.max(0, firstSummary.messageCount - 10);
         setLoadedMessageStartIndex(startIndex);
         setHasMoreMessages(startIndex > 0);
@@ -187,28 +184,23 @@ export default function ChatPage() {
     setHasMoreMessages(false);
   };
 
-  // 대화 선택 (최근 10개 메시지만 로드)
+  // 대화 선택 (localStorage와 완전히 동기화)
   const handleSelectHistory = (id: string) => {
     const summary = histories.find(h => h.id === id);
-    
+
     if (summary) {
       // 전체 히스토리를 로드하여 userNote, contextSummary 등 포함
       const fullHistory = loadChatHistoryById(id);
-      
+
       if (fullHistory) {
-        // 최근 10개 메시지만 메모리에 유지
-        const recentMessages = fullHistory.messages.slice(-10);
-        const history: ChatHistory = {
-          ...fullHistory,
-          messages: recentMessages,
-        };
-        setCurrentHistory(history);
-        
+        // 전체 히스토리 상태로 설정 (localStorage와 동기화)
+        setCurrentHistory(fullHistory);
+
         // 로딩 상태 초기화
         const startIndex = Math.max(0, fullHistory.messages.length - 10);
         setLoadedMessageStartIndex(startIndex);
         setHasMoreMessages(startIndex > 0);
-        
+
         // 선택한 대화의 캐릭터 찾기
         if (fullHistory.characterName) {
           const matched = characters.find(c => c.name === fullHistory.characterName);
@@ -225,11 +217,11 @@ export default function ChatPage() {
           userNote: undefined,
         };
         setCurrentHistory(history);
-        
+
         const startIndex = Math.max(0, summary.messageCount - 10);
         setLoadedMessageStartIndex(startIndex);
         setHasMoreMessages(startIndex > 0);
-        
+
         if (summary.characterName) {
           const matched = characters.find(c => c.name === summary.characterName);
           setCurrentCharacter(matched || null);
@@ -250,16 +242,11 @@ export default function ChatPage() {
         // 삭제 후 첫 번째 히스토리의 전체 데이터 로드
         const firstSummary = updated[0];
         const fullHistory = loadChatHistoryById(firstSummary.id);
-        
+
         if (fullHistory) {
-          // 최근 10개 메시지만 메모리에 유지
-          const recentMessages = fullHistory.messages.slice(-10);
-          const firstHistory: ChatHistory = {
-            ...fullHistory,
-            messages: recentMessages,
-          };
-          setCurrentHistory(firstHistory);
-          
+          // 전체 히스토리 상태로 설정 (localStorage와 동기화)
+          setCurrentHistory(fullHistory);
+
           // 로딩 상태 초기화
           const startIndex = Math.max(0, fullHistory.messages.length - 10);
           setLoadedMessageStartIndex(startIndex);
@@ -274,7 +261,7 @@ export default function ChatPage() {
             userNote: undefined,
           };
           setCurrentHistory(firstHistory);
-          
+
           const startIndex = Math.max(0, firstSummary.messageCount - 10);
           setLoadedMessageStartIndex(startIndex);
           setHasMoreMessages(startIndex > 0);
@@ -316,42 +303,56 @@ export default function ChatPage() {
     const fullHistory = loadChatHistoryById(currentHistory.id);
     if (!fullHistory) return;
     
-    const MESSAGES_THRESHOLD = 20; // 10턴
     const lastSummaryIndex = fullHistory.lastSummaryAt || 0;
+    const totalMessages = fullHistory.messages.length;
     
-    // 이미 요약된 부분 이후의 메시지만 가져오기
-    // 마지막 20개는 제외 (최근 대화는 그대로 유지)
-    const messagesToSummarize = fullHistory.messages.slice(
-      lastSummaryIndex,
-      fullHistory.messages.length - MESSAGES_THRESHOLD
-    );
+    // 이미 요약된 부분 이후의 메시지만 가져오기 (새로 추가된 메시지만)
+    const messagesToSummarize = fullHistory.messages.slice(lastSummaryIndex);
     
-    if (messagesToSummarize.length === 0) return;
+    if (messagesToSummarize.length === 0) {
+      console.log('📝 요약할 새 메시지가 없습니다.');
+      return;
+    }
     
-    console.log(`📝 이전 대화 요약 중... (${messagesToSummarize.length}개 메시지, 시작 인덱스: ${lastSummaryIndex})`);
+    console.log(`📝 이전 대화 요약 중... (${messagesToSummarize.length}개 메시지, 시작 인덱스: ${lastSummaryIndex}, 전체: ${totalMessages}개)`);
     
     try {
+      // API 키 가져오기 (클라이언트에서 선택한 키)
+      let apiKeyForSummary: string | undefined;
+      if (typeof window !== 'undefined') {
+        try {
+          const { getSelectedApiKey } = require('@/lib/storage/apiKeys');
+          apiKeyForSummary = getSelectedApiKey() || undefined;
+        } catch {
+          // 무시
+        }
+      }
+
       const response = await fetch('/api/summarize', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           messages: messagesToSummarize,
-          existingSummary: fullHistory.contextSummary,
+          existingSummary: fullHistory.contextSummary || undefined,
           characterName: fullHistory.characterName,
+          userNote: fullHistory.userNote || undefined,
+          apiKey: apiKeyForSummary,
         }),
       });
       
       if (!response.ok) {
-        throw new Error('요약 API 호출 실패');
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || '요약 API 호출 실패');
       }
       
       const { summary } = await response.json();
       
       // 전체 히스토리를 업데이트하여 저장
+      // lastSummaryAt을 현재 전체 메시지 개수로 업데이트 (모두 요약 완료)
       const updated = {
         ...fullHistory,
         contextSummary: summary,
-        lastSummaryAt: fullHistory.messages.length - MESSAGES_THRESHOLD,
+        lastSummaryAt: totalMessages, // 지금까지의 모든 메시지가 요약됨
       };
       
       // 즉시 localStorage에 저장
@@ -374,6 +375,102 @@ export default function ChatPage() {
     }
   };
 
+  // 수동 요약 함수
+  const handleManualSummarize = async () => {
+    if (!currentHistory?.id || isLoading) {
+      alert('대화가 없거나 처리 중입니다.');
+      return;
+    }
+
+    // localStorage에 저장된 최신 전체 히스토리 가져오기
+    const fullHistory = loadChatHistoryById(currentHistory.id);
+
+    // currentHistory 상태가 최신 상태인지 확인하고 동기화
+    if (fullHistory) {
+      setCurrentHistory(fullHistory);
+    }
+
+    if (!fullHistory || fullHistory.messages.length === 0) {
+      alert('요약할 대화가 없습니다.');
+      return;
+    }
+
+    // confirm 먼저 확인 (모달 열기 전)
+    if (!confirm(`지금까지의 대화 ${fullHistory.messages.length}개를 요약하시겠습니까?`)) {
+      return;
+    }
+
+    setIsLoading(true);
+
+    try {
+      // API 키 가져오기 (클라이언트에서 선택한 키)
+      let apiKeyForSummary: string | undefined;
+      if (typeof window !== 'undefined') {
+        try {
+          const { getSelectedApiKey } = require('@/lib/storage/apiKeys');
+          apiKeyForSummary = getSelectedApiKey() || undefined;
+        } catch {
+          // 무시
+        }
+      }
+
+      // 전체 대화를 요약 (lastSummaryAt 무시)
+      const response = await fetch('/api/summarize', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          messages: fullHistory.messages, // 전체 메시지
+          existingSummary: fullHistory.contextSummary || undefined, // 기존 메모리와 병합
+          characterName: fullHistory.characterName,
+          userNote: fullHistory.userNote || undefined,
+          apiKey: apiKeyForSummary,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || '요약 API 호출 실패');
+      }
+
+      const { summary } = await response.json();
+
+      // 전체 히스토리를 업데이트하여 저장
+      const updated = {
+        ...fullHistory,
+        contextSummary: summary,
+        lastSummaryAt: fullHistory.messages.length, // 전체 메시지 요약 완료
+      };
+
+      // 즉시 localStorage에 저장
+      saveChatHistory(updated);
+
+      // currentHistory도 업데이트
+      setCurrentHistory(prev => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          contextSummary: summary,
+          lastSummaryAt: updated.lastSummaryAt,
+        };
+      });
+
+      // 요약 완료 후 모달 자동으로 열기 (먼저 실행)
+      setShowMemoryModal(true);
+
+      // UI 업데이트가 완료될 시간을 주기 위해 약간 지연
+      setTimeout(() => {
+        alert('대화 요약이 완료되었습니다!');
+      }, 100);
+
+      console.log('✅ 수동 요약 완료:', summary.substring(0, 80) + '...');
+    } catch (error) {
+      console.error('수동 요약 실패:', error);
+      alert(error instanceof Error ? error.message : '요약 중 오류가 발생했습니다.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   // 메시지 전송 (최근 10턴만 전송)
   const handleSend = async () => {
     if (!input.trim() || isLoading || !currentHistory) return;
@@ -391,20 +488,6 @@ export default function ChatPage() {
     
     const newMessages = allMessages;
     
-    // 10턴(20개 메시지)마다 자동 요약 트리거
-    const TURNS_THRESHOLD = 10;
-    const MESSAGES_THRESHOLD = TURNS_THRESHOLD * 2;
-    
-    const shouldSummarize = 
-      newMessages.length > MESSAGES_THRESHOLD && 
-      newMessages.length % MESSAGES_THRESHOLD === 0;
-    
-    if (shouldSummarize) {
-      console.log(`🔄 ${newMessages.length / 2}턴 도달. 이전 대화 요약을 시작합니다...`);
-      // 요약은 비동기로 실행 (대화는 계속 진행)
-      summarizeContext().catch(err => console.error('요약 오류:', err));
-    }
-    
     // 최근 10턴(20개 메시지)만 API에 전송
     const MAX_TURNS = 10;
     const messagesToSend = newMessages.slice(-MAX_TURNS * 2);
@@ -418,24 +501,24 @@ export default function ChatPage() {
       content: l.content,
     }));
     
-    // 사용자 메시지 추가 (최근 10개만 메모리에 유지)
+    // 사용자 메시지 추가 (localStorage와 동기화)
     setCurrentHistory((prev) => {
       if (!prev) return prev;
-      
+
       // localStorage에 전체 저장할 히스토리 (전체 메시지 포함)
       // fullHistory를 사용하여 userNote, contextSummary 등 모든 필드 포함
       const fullHistoryToSave: ChatHistory = {
         ...(fullHistory || prev), // fullHistory가 있으면 사용, 없으면 prev 사용
         messages: newMessages,
-        title: prev.messages.length === 0 
+        title: prev.messages.length === 0
           ? generateChatTitle(newMessages)
           : prev.title,
         updatedAt: Date.now(),
       };
-      
+
       // localStorage에 전체 저장
       saveChatHistory(fullHistoryToSave);
-      
+
       // 메모리에는 최근 10개만 유지 (userNote 등은 유지)
       const recentMessages = newMessages.slice(-10);
       return {
@@ -480,6 +563,44 @@ export default function ChatPage() {
                 // 클라이언트에 키가 없으면 서버가 환경 변수 사용
                 return key || undefined;
               } catch {
+                return undefined;
+              }
+            }
+            return undefined;
+          })(),
+          clientApiKeys: (() => {
+            // 클라이언트에 저장된 모든 활성 API 키들을 서버로 전달
+            if (typeof window !== 'undefined') {
+              try {
+                const { loadApiKeys } = require('@/lib/storage/apiKeys');
+                const keys = loadApiKeys();
+                console.log(`[Client] 로드된 API 키 개수: ${keys.length}`);
+                keys.forEach((k: any, i: number) => {
+                  console.log(`[Client] 키 ${i + 1}: ${k.name || 'Unnamed'} - Active: ${k.isActive}, QuotaExceeded: ${!!k.quotaExceeded}`);
+                });
+                
+                // 활성화되고 할당량 초과되지 않은 키들만 반환
+                const activeKeys = keys
+                  .filter((k: any) => {
+                    if (!k.isActive) {
+                      console.log(`[Client] 키 "${k.name || 'Unnamed'}" 제외: 비활성화됨`);
+                      return false;
+                    }
+                    if (k.quotaExceeded) {
+                      const oneHour = 60 * 60 * 1000;
+                      if (Date.now() - k.quotaExceeded < oneHour) {
+                        console.log(`[Client] 키 "${k.name || 'Unnamed'}" 제외: 할당량 초과 (1시간 미경과)`);
+                        return false; // 아직 1시간이 지나지 않음
+                      }
+                    }
+                    return true;
+                  })
+                  .map((k: any) => k.key);
+                
+                console.log(`[Client] 전송할 활성 API 키 개수: ${activeKeys.length}`);
+                return activeKeys.length > 0 ? activeKeys : undefined;
+              } catch (error) {
+                console.error('[Client] API 키 로드 실패:', error);
                 return undefined;
               }
             }
@@ -545,16 +666,16 @@ export default function ChatPage() {
         content: data.message,
       };
 
-      // 응답 메시지 추가 (최근 10개만 메모리에 유지)
+      // 응답 메시지 추가 (localStorage와 동기화)
       setCurrentHistory((prev) => {
         if (!prev) return prev;
-        
+
         // localStorage에서 전체 히스토리를 가져와서 전체 메시지 배열 생성
         const fullHistory = loadChatHistoryById(prev.id);
         const allMessages = fullHistory
           ? [...fullHistory.messages, assistantMessage]
           : [...prev.messages, assistantMessage];
-        
+
         // localStorage에 전체 저장 (fullHistory를 사용하여 userNote 등 모든 필드 포함)
         const updatedHistory: ChatHistory = {
           ...(fullHistory || prev), // fullHistory가 있으면 사용, 없으면 prev 사용
@@ -562,7 +683,21 @@ export default function ChatPage() {
           updatedAt: Date.now(),
         };
         saveChatHistory(updatedHistory);
-        
+
+        // 10턴(20개 메시지)마다 자동 요약 트리거
+        // lastSummaryAt 기반으로 체크: 새로 추가된 메시지가 20개 이상이면 요약
+        const lastSummaryAt = updatedHistory.lastSummaryAt || 0;
+        const newMessagesCount = allMessages.length - lastSummaryAt;
+        const MESSAGES_THRESHOLD = 20; // 10턴 = 20개 메시지
+
+        if (newMessagesCount >= MESSAGES_THRESHOLD) {
+          console.log(`🔄 ${newMessagesCount}개 메시지 추가됨 (10턴 도달). 이전 대화 요약을 시작합니다...`);
+          // 요약은 비동기로 실행 (대화는 계속 진행)
+          setTimeout(() => {
+            summarizeContext().catch(err => console.error('요약 오류:', err));
+          }, 0);
+        }
+
         // 메모리에는 최근 10개만 유지 (userNote 등은 유지)
         const recentMessages = allMessages.slice(-10);
         return {
@@ -734,17 +869,152 @@ export default function ChatPage() {
     console.log(`✏️ 메시지 ${messageIndex + 1} 수정 완료`);
   };
 
+  // 메시지 다시 생성 (re-roll)
+  const handleRerollMessage = async (messageIndex: number) => {
+    if (!currentHistory || isLoading) return;
+    
+    // 해당 메시지가 assistant 메시지인지 확인
+    const targetMessage = currentHistory.messages[messageIndex];
+    if (!targetMessage || targetMessage.role !== 'assistant') {
+      console.warn('Re-roll은 assistant 메시지에만 사용할 수 있습니다.');
+      return;
+    }
+    
+    // 전체 히스토리를 가져와서 해당 메시지 이전까지의 메시지만 사용
+    const fullHistory = loadChatHistoryById(currentHistory.id);
+    const allMessages = fullHistory ? fullHistory.messages : currentHistory.messages;
+    
+    // 해당 메시지 이전까지의 메시지만 추출 (해당 메시지의 이전 user 메시지까지 포함)
+    // messageIndex는 현재 메모리에 있는 인덱스이므로, 전체 히스토리에서 찾아야 함
+    const messagesBeforeReroll = allMessages.slice(0, messageIndex);
+    
+    // 마지막 메시지가 user 메시지여야 함
+    if (messagesBeforeReroll.length === 0 || messagesBeforeReroll[messagesBeforeReroll.length - 1].role !== 'user') {
+      console.warn('Re-roll을 위해서는 해당 메시지 이전에 user 메시지가 있어야 합니다.');
+      return;
+    }
+    
+    // 최근 10턴(20개 메시지)만 API에 전송
+    const MAX_TURNS = 10;
+    const messagesToSend = messagesBeforeReroll.slice(-MAX_TURNS * 2);
+    
+    // 로어북 키워드 감지
+    const allLorebooks = loadLorebooks();
+    const activeLorebooks = detectKeywords(messagesToSend, allLorebooks, maxActiveLorebooks);
+    const activeLorebooksData = activeLorebooks.map(l => ({
+      id: l.id,
+      keywords: l.keywords,
+      content: l.content,
+    }));
+    
+    setIsLoading(true);
+    
+    try {
+      const response = await fetch('/api/chat', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          messages: messagesToSend,
+          contextSummary: currentHistory.contextSummary,
+          userNote: currentHistory.userNote,
+          characterName: currentHistory.characterName,
+          characterPersonality: currentHistory.characterPersonality,
+          model: currentHistory.model,
+          maxOutputTokens: maxOutputTokens !== 8192 ? maxOutputTokens : undefined,
+          thinkingBudget: thinkingBudget,
+          activeLorebooks: activeLorebooksData.length > 0 ? activeLorebooksData : undefined,
+          apiKey: (() => {
+            if (typeof window !== 'undefined') {
+              try {
+                const { getSelectedApiKey } = require('@/lib/storage/apiKeys');
+                const key = getSelectedApiKey();
+                return key || undefined;
+              } catch {
+                return undefined;
+              }
+            }
+            return undefined;
+          })(),
+        }),
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        const errorMessage = errorData.error || `서버 오류 (${response.status})`;
+        throw new Error(errorMessage);
+      }
+      
+      const data = await response.json();
+      
+      if (!data || !data.message) {
+        throw new Error('응답 형식이 올바르지 않습니다.');
+      }
+      
+      const newAssistantMessage: ChatMessage = {
+        role: 'assistant',
+        content: data.message,
+      };
+      
+      // 전체 히스토리에서 해당 메시지를 새 응답으로 교체
+      const updatedAllMessages = [...allMessages];
+      updatedAllMessages[messageIndex] = newAssistantMessage;
+      
+      // 해당 메시지 이후의 메시지들은 제거 (re-roll하면 그 이후 대화는 무효)
+      const finalMessages = updatedAllMessages.slice(0, messageIndex + 1);
+      
+      // localStorage에 전체 저장
+      const updatedHistory: ChatHistory = {
+        ...(fullHistory || currentHistory),
+        messages: finalMessages,
+        updatedAt: Date.now(),
+      };
+      saveChatHistory(updatedHistory);
+
+      // 메모리에는 최근 10개만 유지
+      const recentMessages = finalMessages.slice(-10);
+      setCurrentHistory({
+        ...updatedHistory,
+        messages: recentMessages,
+      });
+      
+      console.log(`🔄 메시지 ${messageIndex + 1} 다시 생성 완료`);
+    } catch (error) {
+      console.error('Re-roll error:', error);
+      alert(error instanceof Error ? error.message : '메시지 다시 생성 중 오류가 발생했습니다.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const handleUserNoteChange = (note: string) => {
     if (!currentHistory) return;
-    
+
     const updated = {
       ...currentHistory,
       userNote: note,
       updatedAt: Date.now(),
     };
-    
+
     setCurrentHistory(updated);
     saveChatHistory(updated);
+  };
+
+  const handleContextSummaryChange = (summary: string) => {
+    if (!currentHistory) return;
+
+    const updated = {
+      ...currentHistory,
+      contextSummary: summary,
+      updatedAt: Date.now(),
+    };
+
+    // localStorage에 전체 저장
+    saveChatHistory(updated);
+
+    // 상태 업데이트 (함수형 업데이트 사용하여 경합 조건 방지)
+    setCurrentHistory(prev => prev ? { ...prev, contextSummary: summary, updatedAt: Date.now() } : null);
   };
 
   // 사이드바 토글
@@ -866,11 +1136,38 @@ export default function ChatPage() {
     document.body.style.userSelect = 'none';
   }, [settingsWidth]);
 
+  // 메모리 모달용 안전한 값 계산
+  const currentHistoryId = currentHistory?.id ?? null;
+  const fullHistoryForMemory = currentHistoryId
+    ? loadChatHistoryById(currentHistoryId)
+    : null;
+
+  const memoryContextSummary =
+    fullHistoryForMemory?.contextSummary ?? currentHistory?.contextSummary;
+
+  const memoryLastSummaryAt =
+    fullHistoryForMemory?.lastSummaryAt ?? currentHistory?.lastSummaryAt;
+
+  const memoryTotalMessages =
+    fullHistoryForMemory?.messages.length ??
+    currentHistory?.messages.length ??
+    0;
+
   if (!currentHistory) {
     return (
-      <div className="h-screen flex items-center justify-center bg-[var(--bg-primary)]">
-        <div className="text-[var(--text-secondary)]">로딩 중...</div>
-      </div>
+      <>
+        <div className="h-screen flex items-center justify-center bg-[var(--bg-primary)]">
+          <div className="text-[var(--text-secondary)]">로딩 중...</div>
+        </div>
+        {/* 메모리 모달 - currentHistory가 없어도 렌더링 */}
+        <MemoryModal
+          isOpen={showMemoryModal}
+          onClose={() => setShowMemoryModal(false)}
+          contextSummary={undefined}
+          lastSummaryAt={undefined}
+          totalMessages={0}
+        />
+      </>
     );
   }
 
@@ -903,6 +1200,7 @@ export default function ChatPage() {
           onInputChange={setInput}
           onSend={handleSend}
           onEditMessage={handleEditMessage}
+          onRerollMessage={handleRerollMessage}
           onLoadPreviousMessages={handleLoadPreviousMessages}
           hasMoreMessages={hasMoreMessages}
         />
@@ -936,11 +1234,23 @@ export default function ChatPage() {
           onMaxActiveLorebooksChange={handleMaxActiveLorebooksChange}
           onAutoScrollChange={setAutoScroll}
           onUserNoteChange={handleUserNoteChange}
+          onContextSummaryChange={handleContextSummaryChange}
           onUIStyleChange={setUIStyle}
+          onManualSummarize={handleManualSummarize}
+          onOpenMemoryModal={() => setShowMemoryModal(true)}
           onToggle={handleToggleSettings}
           onResizeStart={handleResizeStart}
         />
       </div>
+
+      {/* 메모리 모달 - 독립적인 중앙 팝업 (항상 렌더링) */}
+      <MemoryModal
+        isOpen={showMemoryModal}
+        onClose={() => setShowMemoryModal(false)}
+        contextSummary={memoryContextSummary}
+        lastSummaryAt={memoryLastSummaryAt}
+        totalMessages={memoryTotalMessages}
+      />
 
       {/* Mobile Layout */}
       <div className="hide-desktop">
@@ -957,6 +1267,7 @@ export default function ChatPage() {
             onInputChange={setInput}
             onSend={handleSend}
             onEditMessage={handleEditMessage}
+            onRerollMessage={handleRerollMessage}
             onLoadPreviousMessages={handleLoadPreviousMessages}
             hasMoreMessages={hasMoreMessages}
             onMenuOpen={() => {

@@ -3,7 +3,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Bot, PenSquare, SlidersHorizontal, Zap, MessageSquare, Brain, BookOpen, ChevronRight, FileText, Download, Upload, Key, Plus, Trash2, Check, ChevronLeft, GripVertical, ArrowDown, Sparkles } from 'lucide-react';
 import { loadSettings, saveSettings, updateSettings, type OutputSpeed, type MaxOutputTokens, type ThinkingBudget, type MaxActiveLorebooks, type UIStyle } from '@/lib/storage/settings';
-import { MemoryModal } from './MemoryModal';
 import { loadApiKeys, addApiKey, deleteApiKey, updateApiKey, getActiveApiKey, setSelectedApiKeyId, getSelectedApiKeyId, type ApiKeyInfo } from '@/lib/storage/apiKeys';
 import { LorebookManager } from './LorebookManager';
 
@@ -33,6 +32,9 @@ interface SettingsSidebarProps {
   onAutoScrollChange: (enabled: boolean) => void;
   onUserNoteChange: (note: string) => void;
   onUIStyleChange: (style: UIStyle) => void;
+  onContextSummaryChange?: (summary: string) => void;
+  onManualSummarize?: () => void;
+  onOpenMemoryModal?: () => void;
   onToggle?: () => void;
   onResizeStart?: (e: React.MouseEvent) => void;
 }
@@ -63,13 +65,16 @@ export const SettingsSidebar: React.FC<SettingsSidebarProps> = ({
   onAutoScrollChange,
   onUserNoteChange,
   onUIStyleChange,
+  onContextSummaryChange,
+  onManualSummarize,
+  onOpenMemoryModal,
   onToggle,
   onResizeStart,
 }) => {
   const [showAdvanced, setShowAdvanced] = useState(false);
-  const [showMemoryModal, setShowMemoryModal] = useState(false);
+  const [isEditingMemory, setIsEditingMemory] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  
+
       // API 키 관리 상태
       const [apiKeys, setApiKeys] = useState<ApiKeyInfo[]>([]);
       const [showAddKey, setShowAddKey] = useState(false);
@@ -309,7 +314,7 @@ export const SettingsSidebar: React.FC<SettingsSidebarProps> = ({
               <Bot size={20} className="text-[var(--text-secondary)] mx-auto" />
             </button>
             <button
-              onClick={() => setShowMemoryModal(true)}
+              onClick={() => onOpenMemoryModal?.()}
               className="w-full p-2.5 hover:bg-[var(--bg-glass)] rounded-xl transition-all duration-300 hover:scale-110 relative"
               title="대화 메모리"
             >
@@ -414,21 +419,28 @@ export const SettingsSidebar: React.FC<SettingsSidebarProps> = ({
             <ArrowDown size={16} />
             자동 스크롤
           </label>
-          <div className="flex items-center justify-between p-3 bg-[var(--bg-tertiary)] border border-[var(--border-color)] rounded-md">
-            <span className="text-sm text-[var(--text-primary)]">
-              {autoScroll ? '활성화됨' : '비활성화됨'}
-            </span>
+          <div className="grid grid-cols-2 gap-2">
             <button
-              onClick={() => handleAutoScrollChange(!autoScroll)}
-              className={`relative w-11 h-6 rounded-full transition-colors duration-200 ${
-                autoScroll ? 'bg-[var(--accent-blue)]' : 'bg-[var(--bg-primary)] border border-[var(--border-color)]'
+              type="button"
+              onClick={() => handleAutoScrollChange(true)}
+              className={`px-3 py-2 text-xs font-medium rounded-lg border transition-all duration-200 ${
+                autoScroll
+                  ? 'bg-[var(--accent-primary)]/90 text-white border-transparent shadow-sm'
+                  : 'bg-[var(--bg-tertiary)] text-[var(--text-secondary)] border-[var(--border-color)] hover:border-[var(--border-hover)]'
               }`}
             >
-              <span
-                className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow-md transition-transform duration-200 ${
-                  autoScroll ? 'translate-x-5' : 'translate-x-0'
-                }`}
-              />
+              활성화
+            </button>
+            <button
+              type="button"
+              onClick={() => handleAutoScrollChange(false)}
+              className={`px-3 py-2 text-xs font-medium rounded-lg border transition-all duration-200 ${
+                !autoScroll
+                  ? 'bg-[var(--accent-primary)]/90 text-white border-transparent shadow-sm'
+                  : 'bg-[var(--bg-tertiary)] text-[var(--text-secondary)] border-[var(--border-color)] hover:border-[var(--border-hover)]'
+              }`}
+            >
+              비활성화
             </button>
           </div>
           <p className="text-xs text-[var(--text-tertiary)] mt-1">
@@ -568,21 +580,100 @@ export const SettingsSidebar: React.FC<SettingsSidebarProps> = ({
 
         {/* 대화 메모리 */}
         <div className="border-t border-[var(--border-color)] pt-4">
-          <button
-            onClick={() => setShowMemoryModal(true)}
-            className="w-full flex items-center justify-between text-sm font-semibold text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors p-2 rounded hover:bg-[var(--bg-tertiary)]"
-          >
-            <span className="flex items-center gap-2">
-              <BookOpen size={16} />
-              대화 메모리
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-2">
+              <BookOpen size={16} className="text-[var(--text-secondary)]" />
+              <span className="text-sm font-semibold text-[var(--text-secondary)]">
+                대화 메모리
+              </span>
               {contextSummary && (
                 <span className="text-xs bg-[var(--accent-blue)] text-white px-1.5 py-0.5 rounded">
                   있음
                 </span>
               )}
-            </span>
-            <ChevronRight size={16} />
-          </button>
+            </div>
+
+            {/* 요약 상태 표시 */}
+            {lastSummaryAt !== undefined && totalMessages > 0 && (
+              <span className="text-xs text-[var(--text-tertiary)]">
+                {lastSummaryAt} / {totalMessages}
+              </span>
+            )}
+          </div>
+
+          {/* 대화 요약 편집 영역 */}
+          <div className="mb-3">
+            {isEditingMemory ? (
+              <div className="space-y-2">
+                <textarea
+                  value={contextSummary || ''}
+                  onChange={(e) => onContextSummaryChange?.(e.target.value)}
+                  placeholder="이전 대화에 대한 요약을 입력하세요..."
+                  rows={6}
+                  className="w-full resize-y font-mono text-xs bg-[var(--bg-tertiary)] border border-[var(--border-color)] rounded-md px-3 py-2 text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-blue)]"
+                />
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setIsEditingMemory(false)}
+                    className="flex-1 px-3 py-1.5 bg-[var(--accent-blue)] hover:bg-[var(--accent-blue-hover)] text-white rounded-md text-sm transition-colors"
+                  >
+                    저장
+                  </button>
+                  <button
+                    onClick={() => {
+                      // 취소 시 원래 내용으로 복원 (onContextSummaryChange를 호출하지 않음)
+                      setIsEditingMemory(false);
+                    }}
+                    className="px-3 py-1.5 bg-[var(--bg-tertiary)] hover:bg-[var(--bg-hover)] text-[var(--text-primary)] rounded-md text-sm transition-colors"
+                  >
+                    취소
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div
+                onClick={() => setIsEditingMemory(true)}
+                className="min-h-[100px] max-h-40 overflow-y-auto p-3 bg-[var(--bg-tertiary)] border border-[var(--border-color)] rounded-md text-sm text-[var(--text-primary)] cursor-text hover:border-[var(--border-hover)] transition-colors"
+              >
+                {contextSummary ? (
+                  <pre className="whitespace-pre-wrap font-sans text-xs leading-relaxed">
+                    {contextSummary}
+                  </pre>
+                ) : (
+                  <div className="flex items-center justify-center h-24 text-[var(--text-tertiary)]">
+                    <p className="text-center">요약된 대화 내용이 없습니다</p>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* 수동 요약 버튼과 모달 열기 버튼 */}
+          <div className="flex gap-2">
+            {onManualSummarize && (
+              <button
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  onManualSummarize();
+                }}
+                disabled={totalMessages < 2}
+                className="flex-1 px-3 py-2 bg-[var(--accent-blue)] hover:bg-[var(--accent-blue-hover)] disabled:bg-[var(--bg-tertiary)] disabled:text-[var(--text-tertiary)] disabled:cursor-not-allowed text-white text-sm font-medium rounded-md transition-colors flex items-center justify-center gap-2"
+              >
+                <Sparkles size={14} />
+                요약 생성
+              </button>
+            )}
+
+            <button
+              onClick={() => onOpenMemoryModal?.()}
+              className="px-3 py-2 bg-[var(--bg-tertiary)] hover:bg-[var(--bg-hover)] text-[var(--text-primary)] text-sm font-medium rounded-md transition-colors flex items-center justify-center gap-2"
+              title="자세히 보기"
+            >
+              <ChevronRight size={14} />
+            </button>
+          </div>
+
           {!contextSummary && (
             <p className="text-xs text-[var(--text-tertiary)] mt-2 px-2">
               10턴(20개 메시지)마다 자동 생성됩니다
@@ -825,15 +916,6 @@ export const SettingsSidebar: React.FC<SettingsSidebarProps> = ({
         </>
         )}
       </div>
-
-      {/* 메모리 모달 */}
-      <MemoryModal
-        isOpen={showMemoryModal}
-        onClose={() => setShowMemoryModal(false)}
-        contextSummary={contextSummary}
-        lastSummaryAt={lastSummaryAt}
-        totalMessages={totalMessages}
-      />
     </div>
   );
 };
