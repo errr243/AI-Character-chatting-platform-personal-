@@ -265,7 +265,7 @@ export const MobileChatArea: React.FC<MobileChatAreaProps> = ({
             </div>
           </div>
         ) : (
-          <div className="space-y-4">
+          <div className="space-y-[50px]">
             {messages.map((message, index) => {
               const displayContent =
                 outputSpeed !== 'instant' &&
@@ -280,10 +280,10 @@ export const MobileChatArea: React.FC<MobileChatAreaProps> = ({
                   className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'} stagger-item`}
                 >
                   <div
-                    className={`rounded-2xl px-4 py-3 max-w-[85%] transition-all duration-300 ${
+                    className={`px-4 py-3 max-w-[85%] transition-all duration-300 ${
                       message.role === 'user'
-                        ? 'bg-gradient-to-br from-[var(--accent-primary)] to-[var(--accent-secondary)] text-white shadow-lg'
-                        : 'glass-card'
+                        ? 'bg-gradient-to-br from-[var(--accent-primary)] to-[var(--accent-secondary)] text-white shadow-lg rounded-xl'
+                        : 'glass-card rounded-2xl'
                     }`}
                   >
                     <MessageBubble

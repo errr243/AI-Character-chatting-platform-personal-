@@ -311,7 +311,7 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
             </div>
           </div>
         ) : (
-          <div className={`${editingMessageIndex !== null ? 'max-w-full px-2' : 'max-w-5xl'} mx-auto space-y-6`}>
+          <div className={`${editingMessageIndex !== null ? 'max-w-full px-2' : 'max-w-5xl'} mx-auto space-y-[50px]`}>
             {messages.map((message, index) => {
               const displayContent =
                 outputSpeed !== 'instant' &&
@@ -326,14 +326,14 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
                   className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'} stagger-item`}
                 >
                   <div
-                    className={`group rounded-2xl px-5 py-4 transition-all duration-300 ${
+                    className={`group px-5 py-4 transition-all duration-300 ${
                       editingMessageIndex === index
                         ? 'w-full max-w-full'
                         : 'max-w-[85%]'
                     } ${
                       message.role === 'user'
-                        ? 'bg-gradient-to-br from-[var(--accent-primary)] to-[var(--accent-secondary)] text-white shadow-lg hover:shadow-xl'
-                        : 'glass-card'
+                        ? 'bg-gradient-to-br from-[var(--accent-primary)] to-[var(--accent-secondary)] text-white shadow-lg hover:shadow-xl rounded-xl'
+                        : 'glass-card rounded-2xl'
                     }`}
                   >
                     {message.role === 'user' ? (
