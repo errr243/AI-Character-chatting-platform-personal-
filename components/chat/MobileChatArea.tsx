@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useRef, useEffect, useState } from 'react';
+import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { Send, Mic, Plus, ChevronDown } from 'lucide-react';
 import type { ChatMessage } from '@/lib/gemini/types';
 import { MessageBubble } from './MessageBubble';
@@ -12,6 +12,7 @@ interface MobileChatAreaProps {
   isLoading: boolean;
   characterName: string;
   outputSpeed?: 'instant' | 'fast' | 'medium' | 'slow';
+  autoScroll?: boolean;
   onTitleChange: (title: string) => void;
   onInputChange: (input: string) => void;
   onSend: () => void;
@@ -28,6 +29,7 @@ export const MobileChatArea: React.FC<MobileChatAreaProps> = ({
   isLoading,
   characterName,
   outputSpeed = 'instant',
+  autoScroll = true,
   onTitleChange,
   onInputChange,
   onSend,
@@ -42,25 +44,107 @@ export const MobileChatArea: React.FC<MobileChatAreaProps> = ({
   const [showScrollToBottom, setShowScrollToBottom] = useState(false);
   const [streamingContent, setStreamingContent] = useState<{ [key: number]: string }>({});
   const [editingMessageIndex, setEditingMessageIndex] = useState<number | null>(null);
+  const [isNearBottom, setIsNearBottom] = useState(true);
+  const prevMessagesLengthRef = useRef(messages.length);
+  const scrollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const lastScrollTopRef = useRef(0);
 
-  // Auto-scroll to bottom
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages, streamingContent]);
+  // Show scroll to bottom button when scrolled up (쓰로틀링 적용)
+  const handleScroll = useCallback(() => {
+    const container = messagesContainerRef.current;
+    if (!container) return;
+    
+    // 쓰로틀링: 100ms마다 한 번만 실행
+    if (scrollTimeoutRef.current) {
+      return;
+    }
+    
+    scrollTimeoutRef.current = setTimeout(() => {
+      scrollTimeoutRef.current = null;
+      
+      const scrollTop = container.scrollTop;
+      const scrollHeight = container.scrollHeight;
+      const clientHeight = container.clientHeight;
+      const scrollBottom = scrollHeight - scrollTop - clientHeight;
+      const nearBottom = scrollBottom < 200;
+      
+      // 상태가 실제로 변경될 때만 업데이트
+      setIsNearBottom(prev => prev !== nearBottom ? nearBottom : prev);
+      setShowScrollToBottom(prev => prev === nearBottom ? false : !nearBottom);
+      
+      lastScrollTopRef.current = scrollTop;
+    }, 100);
+  }, []);
 
-  // Show scroll to bottom button when scrolled up
   useEffect(() => {
     const container = messagesContainerRef.current;
     if (!container) return;
 
-    const handleScroll = () => {
-      const isNearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 200;
-      setShowScrollToBottom(!isNearBottom);
+    container.addEventListener('scroll', handleScroll, { passive: true });
+    // 초기 체크
+    handleScroll();
+    
+    return () => {
+      container.removeEventListener('scroll', handleScroll);
+      if (scrollTimeoutRef.current) {
+        clearTimeout(scrollTimeoutRef.current);
+      }
     };
+  }, [handleScroll]);
 
-    container.addEventListener('scroll', handleScroll);
-    return () => container.removeEventListener('scroll', handleScroll);
-  }, []);
+  // 자동 스크롤: 사용자가 맨 아래에 있을 때만 실행
+  // 또는 새 메시지가 추가되었을 때 (사용자가 메시지를 보낸 경우)
+  useEffect(() => {
+    if (!autoScroll) return; // 자동 스크롤이 비활성화되어 있으면 실행하지 않음
+    
+    const messagesIncreased = messages.length > prevMessagesLengthRef.current;
+    const lastMessageIsUser = messages.length > 0 && messages[messages.length - 1]?.role === 'user';
+    
+    // 새 메시지가 추가되었고, 사용자가 메시지를 보낸 경우 항상 스크롤
+    if (messagesIncreased && lastMessageIsUser) {
+      setIsNearBottom(true);
+      // 다음 프레임에서 스크롤 (리렌더링 후)
+      requestAnimationFrame(() => {
+        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+      });
+    } else if (isNearBottom && messages.length > 0) {
+      // 사용자가 맨 아래에 있으면 스크롤 (메시지가 있을 때만)
+      requestAnimationFrame(() => {
+        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+      });
+    }
+    
+    prevMessagesLengthRef.current = messages.length;
+  }, [messages.length, isNearBottom, autoScroll]); // messages.length만 의존성으로 사용
+
+  // 스트리밍 중에도 사용자가 맨 아래에 있을 때만 스크롤 (쓰로틀링)
+  const streamingKeysCount = Object.keys(streamingContent).length;
+  const prevStreamingKeysCountRef = useRef(streamingKeysCount);
+  
+  useEffect(() => {
+    if (!autoScroll) return; // 자동 스크롤이 비활성화되어 있으면 실행하지 않음
+    
+    if (isNearBottom && streamingKeysCount > 0 && streamingKeysCount !== prevStreamingKeysCountRef.current) {
+      // 스트리밍 키가 변경될 때만 스크롤 (너무 자주 호출 방지)
+      requestAnimationFrame(() => {
+        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+      });
+      prevStreamingKeysCountRef.current = streamingKeysCount;
+    }
+  }, [streamingKeysCount, isNearBottom, autoScroll]);
+
+  // messages.length 변경 시 오래된 인덱스 정리
+  useEffect(() => {
+    setStreamingContent(prev => {
+      const next = { ...prev };
+      Object.keys(next).forEach(key => {
+        if (Number(key) >= messages.length) {
+          delete next[key];
+        }
+      });
+      return next;
+    });
+  }, [messages.length]);
 
   // Streaming effect
   useEffect(() => {
@@ -69,7 +153,8 @@ export const MobileChatArea: React.FC<MobileChatAreaProps> = ({
       return;
     }
 
-    const newStreamingContent: { [key: number]: string } = {};
+    const intervals: NodeJS.Timeout[] = [];
+    const newStreamingContent: { [key: number]: string } = { ...streamingContent };
 
     messages.forEach((message, index) => {
       if (message.role === 'assistant' && !streamingContent[index]) {
@@ -83,15 +168,37 @@ export const MobileChatArea: React.FC<MobileChatAreaProps> = ({
           if (currentIndex >= fullContent.length) {
             currentIndex = fullContent.length;
             clearInterval(streamInterval);
+            // 완료된 interval을 배열에서 제거
+            const intervalIndex = intervals.indexOf(streamInterval);
+            if (intervalIndex > -1) {
+              intervals.splice(intervalIndex, 1);
+            }
+            // 스트리밍 완료 시 streamingContent에서 항목 삭제
+            setStreamingContent(prev => {
+              const next = { ...prev };
+              delete next[index];
+              return next;
+            });
+          } else {
+            setStreamingContent(prev => ({
+              ...prev,
+              [index]: fullContent.slice(0, currentIndex),
+            }));
           }
-          newStreamingContent[index] = fullContent.slice(0, currentIndex);
-          setStreamingContent({ ...newStreamingContent });
         }, delay);
 
-        return () => clearInterval(streamInterval);
+        intervals.push(streamInterval);
+      } else if (message.role === 'assistant' && streamingContent[index]) {
+        // 기존 스트리밍 내용 유지
+        newStreamingContent[index] = streamingContent[index];
       }
     });
-  }, [messages, outputSpeed]);
+
+    // 모든 interval 정리
+    return () => {
+      intervals.forEach(interval => clearInterval(interval));
+    };
+  }, [messages, outputSpeed, streamingContent]);
 
   const handleSend = () => {
     if (!input.trim() || isLoading) return;
