@@ -151,8 +151,10 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
     setStreamingContent(prev => {
       const next = { ...prev };
       Object.keys(next).forEach(key => {
-        if (Number(key) >= messages.length) {
-          delete next[key];
+        const numericKey = Number(key);
+        if (Number.isNaN(numericKey)) return;
+        if (numericKey >= messages.length) {
+          delete next[numericKey];
         }
       });
       return next;
