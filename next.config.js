@@ -2,20 +2,18 @@
 const nextConfig = {
   reactStrictMode: true,
   experimental: {
-    // Turbopack을 명시적으로 활성화
-    turbopack: {},
+    // Turbopack을 명시적으로 활성화 (개발 모드에서만)
+    turbopack: process.env.NODE_ENV === 'development' ? {} : undefined,
   },
 }
 
-// 개발 환경에서 PWA 비활성화 (Turbopack과의 호환성 문제)
-if (process.env.NODE_ENV === 'production') {
-  const withPWA = require('next-pwa')({
-    dest: 'public',
-    register: true,
-    skipWaiting: true,
-  });
-  module.exports = withPWA(nextConfig);
-} else {
-  module.exports = nextConfig;
-}
+// PWA 설정을 항상 포함하되, 개발 환경에서는 비활성화
+const withPWA = require('next-pwa')({
+  dest: 'public',
+  register: true,
+  skipWaiting: true,
+  disable: process.env.NODE_ENV === 'development', // 개발 환경에서는 PWA 비활성화
+});
+
+module.exports = withPWA(nextConfig);
 
