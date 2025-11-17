@@ -18,6 +18,7 @@ interface ChatAreaProps {
   onInputChange: (input: string) => void;
   onSend: () => void;
   onEditMessage?: (index: number, newContent: string) => void;
+  onRerollMessage?: (index: number) => void;
   onLoadPreviousMessages?: () => void;
   hasMoreMessages?: boolean;
 }
@@ -35,6 +36,7 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
   onInputChange,
   onSend,
   onEditMessage,
+  onRerollMessage,
   onLoadPreviousMessages,
   hasMoreMessages = false,
 }) => {
@@ -213,7 +215,7 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
     return () => {
       intervals.forEach(interval => clearInterval(interval));
     };
-  }, [messages, outputSpeed, streamingContent]);
+  }, [messages, outputSpeed]); // streamingContent를 의존성에서 제거하여 무한 루프 방지
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -311,7 +313,7 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
             </div>
           </div>
         ) : (
-          <div className={`${editingMessageIndex !== null ? 'max-w-full px-2' : 'max-w-5xl'} mx-auto space-y-[80px]`}>
+          <div className={`${editingMessageIndex !== null ? 'max-w-full px-2' : 'max-w-5xl'} mx-auto`}>
             {messages.map((message, index) => {
               const displayContent =
                 outputSpeed !== 'instant' &&
@@ -320,16 +322,27 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
                   ? streamingContent[index]
                   : message.content;
 
+              const isSameSenderAsPrev =
+                index > 0 && messages[index - 1]?.role === message.role;
+              const marginTop =
+                index === 0 ? 0 : isSameSenderAsPrev ? 16 : 64;
+
+              const rowSidePadding =
+                message.role === 'user'
+                  ? { paddingRight: 24 }
+                  : { paddingLeft: 24 };
+
               return (
                 <div
                   key={index}
                   className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'} stagger-item`}
+                  style={{ marginTop, ...rowSidePadding }}
                 >
                   <div
                     className={`group transition-all duration-300 ${
                       editingMessageIndex === index
-                        ? 'w-full max-w-full px-6 py-5'
-                        : 'max-w-[85%] px-7 py-5'
+                        ? 'w-full max-w-full px-8 py-6'
+                        : 'max-w-[85%] px-9 py-7'
                     } ${
                       message.role === 'user'
                         ? 'bg-gradient-to-br from-[var(--accent-primary)] to-[var(--accent-secondary)] text-white shadow-lg hover:shadow-xl'
@@ -352,6 +365,7 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
                         characterName={characterName}
                         onEdit={onEditMessage ? (newContent) => onEditMessage(index, newContent) : undefined}
                         onEditingChange={(isEditing) => setEditingMessageIndex(isEditing ? index : null)}
+                        onReroll={onRerollMessage ? () => onRerollMessage(index) : undefined}
                       />
                     )}
                     {outputSpeed !== 'instant' && 
@@ -365,8 +379,11 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
               );
             })}
             {isLoading && (
-              <div className="flex justify-start stagger-item">
-                <div className="glass-card px-5 py-4 rounded-2xl">
+              <div
+                className="flex justify-start stagger-item"
+                style={{ paddingLeft: 24 }}
+              >
+                <div className="glass-card px-9 py-7 rounded-2xl">
                   <div className="flex items-center space-x-3">
                     <div className="animate-pulse text-2xl" style={{ filter: 'drop-shadow(0 0 8px var(--accent-glow))' }}>💭</div>
                     <span className="text-sm text-[var(--text-secondary)] font-medium">입력 중...</span>

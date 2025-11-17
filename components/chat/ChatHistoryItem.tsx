@@ -11,7 +11,7 @@ interface ChatHistoryItemProps {
   onDelete: () => void;
 }
 
-export const ChatHistoryItem: React.FC<ChatHistoryItemProps> = ({
+export const ChatHistoryItem: React.FC<ChatHistoryItemProps> = React.memo(({
   title,
   isActive,
   onClick,
@@ -49,5 +49,5 @@ export const ChatHistoryItem: React.FC<ChatHistoryItemProps> = ({
       )}
     </div>
   );
-};
+});
 

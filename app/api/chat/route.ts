@@ -5,7 +5,7 @@ import type { ChatMessage } from '@/lib/gemini/types';
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { messages, characterName, characterPersonality, model, maxOutputTokens, thinkingBudget, contextSummary, userNote, activeLorebooks, apiKey } = body;
+    const { messages, characterName, characterPersonality, model, maxOutputTokens, thinkingBudget, contextSummary, userNote, activeLorebooks, apiKey, clientApiKeys } = body;
 
     console.log('=== Chat API Request ===');
     console.log('Messages count:', messages?.length);
@@ -27,7 +27,12 @@ export async function POST(request: NextRequest) {
       process.env.GOOGLE_GEMINI_API_KEY_4,
       process.env.GOOGLE_GEMINI_API_KEY_5,
     ].filter(Boolean) as string[];
+    
+    // 클라이언트에서 전달된 모든 활성 API 키들
+    const clientKeys = Array.isArray(clientApiKeys) ? clientApiKeys.filter(Boolean) : [];
+    
     console.log(`📊 환경 변수에서 ${allEnvKeys.length}개의 API 키를 찾았습니다.`);
+    console.log(`📊 클라이언트에서 ${clientKeys.length}개의 API 키를 받았습니다.`);
 
     if (!messages || !Array.isArray(messages) || messages.length === 0) {
       return NextResponse.json(
@@ -46,20 +51,28 @@ export async function POST(request: NextRequest) {
     }
 
     // API 키 선택 우선순위:
-    // 1. 요청에 포함된 키 (클라이언트에서 설정한 경우)
-    // 2. 환경 변수에서 순차적으로 시도
-    let selectedApiKey = apiKey;
+    // 1. 환경 변수 키 우선 사용 (더 안정적)
+    // 2. 클라이언트에서 제공한 키는 fallback으로만 사용
+    let selectedApiKey: string | undefined;
+    let keySource = '';
     
-    if (!selectedApiKey) {
-      if (allEnvKeys.length > 0) {
-        // 첫 번째 키 사용 (로테이션은 나중에 구현 가능)
-        selectedApiKey = allEnvKeys[0];
-        console.log(`🔑 환경 변수에서 API 키 선택: ${allEnvKeys.length}개 중 첫 번째 키 사용`);
-      } else {
-        console.warn('⚠️ 환경 변수에서 API 키를 찾을 수 없습니다.');
-      }
+    if (allEnvKeys.length > 0) {
+      // 환경 변수 키 우선 사용
+      selectedApiKey = allEnvKeys[0];
+      keySource = '환경 변수';
+      console.log(`🔑 환경 변수에서 API 키 선택: ${allEnvKeys.length}개 중 첫 번째 키 사용`);
+    } else if (apiKey) {
+      // 환경 변수 키가 없으면 클라이언트에서 선택한 키 사용
+      selectedApiKey = apiKey;
+      keySource = '클라이언트';
+      console.log('🔑 클라이언트에서 제공한 API 키 사용 (환경 변수 키 없음)');
+    } else if (clientKeys.length > 0) {
+      // 클라이언트 키 배열에서 첫 번째 사용
+      selectedApiKey = clientKeys[0];
+      keySource = '클라이언트';
+      console.log(`🔑 클라이언트 키 배열에서 API 키 선택: ${clientKeys.length}개 중 첫 번째 키 사용`);
     } else {
-      console.log('🔑 클라이언트에서 제공한 API 키 사용');
+      console.warn('⚠️ API 키를 찾을 수 없습니다.');
     }
     
     if (!selectedApiKey) {
@@ -71,7 +84,7 @@ export async function POST(request: NextRequest) {
 
     // 선택된 API 키로 클라이언트 생성
     const { GeminiClient } = await import('@/lib/gemini/client');
-    const client = new GeminiClient({ apiKey: selectedApiKey });
+    const client = new GeminiClient(selectedApiKey);
     
     let response;
     try {
@@ -87,9 +100,31 @@ export async function POST(request: NextRequest) {
         thinkingBudget,
       });
     } catch (error: any) {
-      // 429 오류 발생 시 다른 API 키로 재시도
-      if (error?.message?.includes('429') || error?.message?.includes('quota') || error?.message?.includes('Quota exceeded')) {
-        console.log('⚠️ 할당량 초과 오류 발생, 다른 API 키로 전환 시도...');
+      // 429 (할당량 초과) 또는 400 (잘못된 API 키) 오류 발생 시 다른 API 키로 재시도
+      // 원본 에러 메시지도 확인 (lib/gemini/client.ts에서 보존된 originalMessage)
+      const originalMessage = error?.originalMessage || error?.message || '';
+      const originalStatus = error?.originalStatus || error?.status || '';
+      
+      const isQuotaError = 
+        originalMessage?.includes('429') || 
+        originalMessage?.includes('quota') || 
+        originalMessage?.includes('Quota exceeded') ||
+        error?.message?.includes('429') || 
+        error?.message?.includes('quota') || 
+        error?.message?.includes('Quota exceeded');
+      
+      const isInvalidKeyError = 
+        originalStatus === 400 ||
+        originalMessage?.includes('400') || 
+        originalMessage?.includes('API key not valid') || 
+        originalMessage?.includes('API_KEY_INVALID') ||
+        error?.message?.includes('400') || 
+        error?.message?.includes('API key not valid') || 
+        error?.message?.includes('API_KEY_INVALID');
+      
+      if (isQuotaError || isInvalidKeyError) {
+        const errorType = isInvalidKeyError ? '잘못된 API 키' : '할당량 초과';
+        console.log(`⚠️ ${errorType} 오류 발생, 다른 API 키로 전환 시도...`);
         // 보안: API 키의 일부만 로그 (처음 4자 + ... + 마지막 4자)
         const maskedKey = selectedApiKey 
           ? `${selectedApiKey.substring(0, 4)}...${selectedApiKey.substring(selectedApiKey.length - 4)}`
@@ -97,13 +132,24 @@ export async function POST(request: NextRequest) {
         console.log(`현재 사용 중인 키: ${maskedKey}`);
         
         // 현재 사용한 키를 제외한 나머지 키들
-        const fallbackKeys = allEnvKeys.filter(key => key !== selectedApiKey);
+        // 모든 사용 가능한 키를 하나의 배열로 합치기
+        const allAvailableKeys = [...allEnvKeys, ...clientKeys];
+        const uniqueKeys = Array.from(new Set(allAvailableKeys)); // 중복 제거
         
-        console.log(`🔄 ${fallbackKeys.length}개의 대체 API 키로 재시도 중...`);
+        // 현재 사용한 키를 제외한 나머지 키들
+        let fallbackKeys = uniqueKeys.filter(key => key !== selectedApiKey);
+        
+        console.log(`🔄 ${keySource} 키 실패, ${fallbackKeys.length}개의 대체 API 키로 재시도 중...`);
+        console.log(`   - 환경 변수 키: ${allEnvKeys.length}개`);
+        console.log(`   - 클라이언트 키: ${clientKeys.length}개`);
+        console.log(`   - 총 사용 가능한 키: ${uniqueKeys.length}개`);
         
         if (fallbackKeys.length === 0) {
           console.error('❌ 사용 가능한 대체 API 키가 없습니다.');
-          throw error;
+          const finalError: any = new Error('모든 API 키가 유효하지 않습니다. 환경 변수 또는 설정에서 유효한 API 키를 확인해주세요.');
+          finalError.originalMessage = originalMessage;
+          finalError.originalStatus = originalStatus;
+          throw finalError;
         }
 
         for (let i = 0; i < fallbackKeys.length; i++) {
@@ -111,7 +157,7 @@ export async function POST(request: NextRequest) {
           
           try {
             console.log(`🔄 API 키 ${i + 1}/${fallbackKeys.length} 시도 중...`);
-            const fallbackClient = new GeminiClient({ apiKey: fallbackKey });
+            const fallbackClient = new GeminiClient(fallbackKey);
             response = await fallbackClient.chat({
               messages: messages as ChatMessage[],
               characterName,
@@ -126,9 +172,13 @@ export async function POST(request: NextRequest) {
             console.log(`✅ API 키 전환 성공! (키 ${i + 1}/${fallbackKeys.length} 사용)`);
             break; // 성공하면 루프 종료
           } catch (retryError: any) {
-            const isQuotaError = retryError?.message?.includes('429') || retryError?.message?.includes('quota');
-            if (isQuotaError) {
+            const isRetryQuotaError = retryError?.message?.includes('429') || retryError?.message?.includes('quota');
+            const isRetryInvalidKeyError = retryError?.message?.includes('400') || retryError?.message?.includes('API key not valid');
+            
+            if (isRetryQuotaError) {
               console.log(`❌ 키 ${i + 1}/${fallbackKeys.length}도 할당량 초과, 다음 키 시도...`);
+            } else if (isRetryInvalidKeyError) {
+              console.log(`❌ 키 ${i + 1}/${fallbackKeys.length}도 잘못된 키, 다음 키 시도...`);
             } else {
               console.log(`❌ 키 ${i + 1}/${fallbackKeys.length} 오류: ${retryError?.message?.substring(0, 50)}`);
             }
@@ -136,13 +186,16 @@ export async function POST(request: NextRequest) {
           }
         }
         
-        // 모든 키가 실패한 경우 원래 오류를 다시 throw
+        // 모든 키가 실패한 경우 명확한 에러 메시지와 함께 throw
         if (!response) {
           console.error('❌ 모든 API 키가 실패했습니다.');
-          throw error;
+          const finalError: any = new Error('모든 API 키가 유효하지 않습니다. 환경 변수 또는 설정에서 유효한 API 키를 확인해주세요.');
+          finalError.originalMessage = originalMessage;
+          finalError.originalStatus = originalStatus;
+          throw finalError;
         }
       } else {
-        throw error; // 429가 아닌 다른 오류는 그대로 throw
+        throw error; // 429/400이 아닌 다른 오류는 그대로 throw
       }
     }
 

@@ -6,7 +6,7 @@ import remarkGfm from 'remark-gfm';
 import rehypeRaw from 'rehype-raw';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
-import { Edit, Check, X, Copy } from 'lucide-react';
+import { Edit, Check, X, Copy, RotateCw } from 'lucide-react';
 
 interface MessageBubbleProps {
   content: string;
@@ -14,6 +14,7 @@ interface MessageBubbleProps {
   characterName: string;
   onEdit?: (newContent: string) => void;
   onEditingChange?: (isEditing: boolean) => void;
+  onReroll?: () => void;
 }
 
 export const MessageBubble: React.FC<MessageBubbleProps> = React.memo(({
@@ -22,6 +23,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = React.memo(({
   characterName,
   onEdit,
   onEditingChange,
+  onReroll,
 }) => {
   const [imageErrors, setImageErrors] = useState<Set<string>>(new Set());
   const [expandedImage, setExpandedImage] = useState<string | null>(null);
@@ -111,6 +113,15 @@ export const MessageBubble: React.FC<MessageBubbleProps> = React.memo(({
                 <Copy size={14} />
               )}
             </button>
+            {onReroll && !isUser && (
+              <button
+                onClick={onReroll}
+                className="opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:bg-[var(--bg-tertiary)] rounded"
+                title="다시 생성"
+              >
+                <RotateCw size={14} />
+              </button>
+            )}
             {onEdit && (
               <button
                 onClick={handleEdit}
@@ -153,34 +164,71 @@ export const MessageBubble: React.FC<MessageBubbleProps> = React.memo(({
           </div>
         </div>
       ) : isUser ? (
-        <div className="whitespace-pre-wrap break-words text-sm leading-relaxed px-1">
+        <div className="whitespace-pre-wrap break-words text-sm leading-relaxed" style={{ padding: '8px 12px' }}>
           {content}
         </div>
       ) : (
-        <div className="prose prose-invert prose-sm max-w-none">
+        <div className="prose prose-invert prose-sm max-w-none" style={{ padding: '8px 12px' }}>
         <ReactMarkdown
           remarkPlugins={[remarkGfm]}
           rehypePlugins={[rehypeRaw]}
           components={{
             // 단락을 div로 변환하여 블록 요소 허용
-            p({ children, ...props }: any) {
-              // 자식 요소 중 div나 블록 요소가 있는지 확인
-              const hasBlockElement = React.Children.toArray(children).some(
-                (child: any) => {
-                  // React 엘리먼트인 경우
+            p({ children, node, ...props }: any) {
+              // 블록 레벨 요소 태그 목록
+              const blockLevelTags = ['div', 'img', 'pre', 'table', 'blockquote', 'ul', 'ol', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6'];
+              
+              // node에서 블록 요소가 포함되어 있는지 재귀적으로 확인
+              const checkNodeForBlockElement = (node: any): boolean => {
+                if (!node) return false;
+                
+                // 현재 노드가 블록 레벨 요소인지 확인
+                if (node.type === 'element' && blockLevelTags.includes(node.tagName)) {
+                  return true;
+                }
+                
+                // 자식 노드들을 재귀적으로 확인
+                if (node.children && Array.isArray(node.children)) {
+                  return node.children.some((child: any) => checkNodeForBlockElement(child));
+                }
+                
+                return false;
+              };
+              
+              // React children에서 블록 요소 확인
+              const checkReactChildrenForBlockElement = (children: any): boolean => {
+                return React.Children.toArray(children).some((child: any) => {
                   if (React.isValidElement(child)) {
                     const type = child.type as any;
-                    const props = child.props as any;
-                    // div, img 태그 또는 블록 요소를 포함하는 경우
-                    return (
-                      type === 'div' ||
-                      type === 'img' ||
-                      (props?.className && typeof props.className === 'string' && props.className.includes('my-2'))
-                    );
+                    const childProps = child.props as any;
+                    
+                    // div 태그인 경우
+                    if (type === 'div') {
+                      return true;
+                    }
+                    
+                    // img 태그인 경우
+                    if (type === 'img') {
+                      return true;
+                    }
+                    
+                    // className에 my-2가 있으면 블록 요소로 간주 (img 컴포넌트가 반환하는 div)
+                    if (childProps?.className && typeof childProps.className === 'string' && childProps.className.includes('my-2')) {
+                      return true;
+                    }
+                    
+                    // children을 재귀적으로 확인
+                    if (childProps?.children) {
+                      return checkReactChildrenForBlockElement(childProps.children);
+                    }
                   }
+                  
                   return false;
-                }
-              );
+                });
+              };
+              
+              // node와 React children 모두 확인
+              const hasBlockElement = checkNodeForBlockElement(node) || checkReactChildrenForBlockElement(children);
               
               // 블록 요소가 있으면 div로, 없으면 p로 렌더링
               if (hasBlockElement) {
@@ -382,6 +430,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = React.memo(({
   return (
     prevProps.content === nextProps.content &&
     prevProps.isUser === nextProps.isUser &&
-    prevProps.characterName === nextProps.characterName
+    prevProps.characterName === nextProps.characterName &&
+    prevProps.onReroll === nextProps.onReroll
   );
 });

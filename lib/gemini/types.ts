@@ -1,21 +1,3 @@
-export interface TranslateRequest {
-  text: string;
-  sourceLang: string;
-  targetLang: string;
-  model?: 'gemini-flash' | 'gemini-pro';
-}
-
-export interface TranslateResponse {
-  translatedText: string;
-  model: string;
-  tokens?: number;
-}
-
-export interface GeminiConfig {
-  apiKey: string;
-  model?: 'gemini-flash' | 'gemini-pro';
-}
-
 export interface ChatMessage {
   role: 'user' | 'assistant';
   content: string;

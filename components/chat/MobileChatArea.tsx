@@ -17,6 +17,7 @@ interface MobileChatAreaProps {
   onInputChange: (input: string) => void;
   onSend: () => void;
   onEditMessage?: (index: number, newContent: string) => void;
+  onRerollMessage?: (index: number) => void;
   onLoadPreviousMessages?: () => void;
   hasMoreMessages?: boolean;
   onMenuOpen?: () => void;
@@ -34,6 +35,7 @@ export const MobileChatArea: React.FC<MobileChatAreaProps> = ({
   onInputChange,
   onSend,
   onEditMessage,
+  onRerollMessage,
   onLoadPreviousMessages,
   hasMoreMessages = false,
   onMenuOpen,
@@ -198,7 +200,7 @@ export const MobileChatArea: React.FC<MobileChatAreaProps> = ({
     return () => {
       intervals.forEach(interval => clearInterval(interval));
     };
-  }, [messages, outputSpeed, streamingContent]);
+  }, [messages, outputSpeed]); // streamingContent를 의존성에서 제거하여 무한 루프 방지
 
   const handleSend = () => {
     if (!input.trim() || isLoading) return;
@@ -265,7 +267,7 @@ export const MobileChatArea: React.FC<MobileChatAreaProps> = ({
             </div>
           </div>
         ) : (
-          <div className="space-y-[80px]">
+          <div>
             {messages.map((message, index) => {
               const displayContent =
                 outputSpeed !== 'instant' &&
@@ -274,13 +276,24 @@ export const MobileChatArea: React.FC<MobileChatAreaProps> = ({
                   ? streamingContent[index]
                   : message.content;
 
+              const isSameSenderAsPrev =
+                index > 0 && messages[index - 1]?.role === message.role;
+              const marginTop =
+                index === 0 ? 0 : isSameSenderAsPrev ? 12 : 40;
+
+              const rowSidePadding =
+                message.role === 'user'
+                  ? { paddingRight: 20 }
+                  : { paddingLeft: 20 };
+
               return (
                 <div
                   key={index}
                   className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'} stagger-item`}
+                  style={{ marginTop, ...rowSidePadding }}
                 >
                   <div
-                    className={`px-5 py-4 max-w-[85%] transition-all duration-300 ${
+                    className={`px-7 py-6 max-w-[85%] transition-all duration-300 ${
                       message.role === 'user'
                         ? 'bg-gradient-to-br from-[var(--accent-primary)] to-[var(--accent-secondary)] text-white shadow-lg'
                         : 'glass-card rounded-2xl'
@@ -293,6 +306,7 @@ export const MobileChatArea: React.FC<MobileChatAreaProps> = ({
                       characterName={characterName}
                       onEdit={onEditMessage ? (newContent) => onEditMessage(index, newContent) : undefined}
                       onEditingChange={(isEditing) => setEditingMessageIndex(isEditing ? index : null)}
+                      onReroll={message.role === 'assistant' && onRerollMessage ? () => onRerollMessage(index) : undefined}
                     />
                   </div>
                 </div>
@@ -300,8 +314,11 @@ export const MobileChatArea: React.FC<MobileChatAreaProps> = ({
             })}
 
             {isLoading && (
-              <div className="flex justify-start stagger-item">
-                <div className="glass-card px-4 py-3 rounded-2xl">
+              <div
+                className="flex justify-start stagger-item"
+                style={{ paddingLeft: 20 }}
+              >
+                <div className="glass-card px-7 py-6 rounded-2xl">
                   <div className="flex items-center space-x-2">
                     <div className="animate-pulse text-xl" style={{ filter: 'drop-shadow(0 0 8px var(--accent-glow))' }}>
                       💭

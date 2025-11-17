@@ -2,7 +2,8 @@
   "permissions": {
     "allow": [
       "Bash(npx claude-plugins --help)",
-      "Bash(npx claude-plugins)"
+      "Bash(npx claude-plugins)",
+      "Bash(qwen -p \"대화 메모리 버튼 클릭 시 모달이 자동으로 열리지 않는 문제를 조사해주세요. \n\n현재 상황:\n- 위치: app/chat/page.tsx의 handleManualSummarize 함수 (393-480줄)\n- 문제: ''대화 요약하기'' 버튼 클릭 시 요약은 완료되지만 모달이 자동으로 열리지 않음\n- 최근 수정: 407-410줄에서 모달 열기 로직을 confirm 이후로 변경함\n\n조사 항목:\n1. handleManualSummarize 함수의 모달 열기 로직 확인 (470줄)\n2. setShowMemoryModal 상태 관리 흐름 확인\n3. MemoryModal 컴포넌트의 isOpen prop 전달 확인 (1238-1244줄)\n4. 요약 완료 후 모달이 정상적으로 열리는지 테스트 필요\n\n관련 파일:\n- app/chat/page.tsx\n- components/chat/MemoryModal.tsx\n\n조사 후 문제점과 해결 방안을 제시해주세요.\")"
     ],
     "deny": [],
     "ask": []

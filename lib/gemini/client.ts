@@ -1,5 +1,5 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
-import type { TranslateRequest, TranslateResponse, GeminiConfig, ChatRequest, ChatResponse, ChatMessage } from './types';
+import type { ChatRequest, ChatResponse, ChatMessage } from './types';
 
 export class GeminiClient {
   private genAI: GoogleGenerativeAI;
@@ -7,14 +7,14 @@ export class GeminiClient {
   private currentApiKey: string;
   private currentApiKeyId?: string;
 
-  constructor(config: GeminiConfig) {
-    if (!config.apiKey) {
+  constructor(apiKey: string, model: 'gemini-flash' | 'gemini-pro' = 'gemini-flash') {
+    if (!apiKey) {
       throw new Error('GOOGLE_GEMINI_API_KEY is required');
     }
     
-    this.currentApiKey = config.apiKey;
-    this.genAI = new GoogleGenerativeAI(config.apiKey);
-    this.defaultModel = config.model || 'gemini-flash';
+    this.currentApiKey = apiKey;
+    this.genAI = new GoogleGenerativeAI(apiKey);
+    this.defaultModel = model;
   }
 
   // API 키 전환 메서드
@@ -22,44 +22,6 @@ export class GeminiClient {
     this.currentApiKey = newApiKey;
     this.genAI = new GoogleGenerativeAI(newApiKey);
     console.log('🔄 API 키가 전환되었습니다.');
-  }
-
-  async translate(request: TranslateRequest): Promise<TranslateResponse> {
-    const model = request.model || this.defaultModel;
-    const geminiModel = this.genAI.getGenerativeModel({ 
-      model: model === 'gemini-flash' ? 'gemini-2.5-flash' : 'gemini-2.5-pro' 
-    });
-
-    const systemPrompt = `You are a professional translator. Translate the following text from ${request.sourceLang} to ${request.targetLang}. 
-    
-Rules:
-- Maintain the original meaning and tone
-- Preserve proper nouns, numbers, and technical terms
-- Keep formatting intact
-- If uncertain about a term, mark it as [UNCLEAR]
-- Provide only the translated text without any explanations or additional comments
-
-Translate the following text:`;
-
-    const prompt = `${systemPrompt}\n\n${request.text}`;
-
-    try {
-      const result = await geminiModel.generateContent(prompt);
-      const response = await result.response;
-      const translatedText = response.text();
-
-      // 토큰 사용량 추정 (대략적인 계산)
-      const tokens = this.estimateTokens(prompt + translatedText);
-
-      return {
-        translatedText: translatedText.trim(),
-        model,
-        tokens,
-      };
-    } catch (error) {
-      console.error('Gemini API Error:', error);
-      throw new Error(`Translation failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    }
   }
 
   // 재시도 헬퍼 함수
@@ -299,6 +261,18 @@ Translate the following text:`;
       };
     } catch (error: any) {
       console.error('Gemini API Error:', error);
+      console.error('Error details:', {
+        message: error?.message,
+        status: error?.status,
+        statusCode: error?.statusCode,
+        statusText: error?.statusText,
+        errorDetails: error?.errorDetails,
+      });
+      
+      // 원본 에러 정보 추출 (API 라우트에서 자동 전환을 위해 필요)
+      const originalMessage = error?.message || '';
+      // GoogleGenerativeAI 에러는 status 속성에 있음
+      const originalStatus = error?.status || error?.statusCode || '';
       
       // 사용자 친화적인 에러 메시지
       let errorMessage = '채팅 처리 중 오류가 발생했습니다.';
@@ -341,13 +315,19 @@ Translate the following text:`;
         } else {
           errorMessage = `요청 한도에 도달했습니다.${quotaInfo}${retryInfo}${modelInfo || ' 잠시 후 다시 시도해주세요.'}`;
         }
-      } else if (error?.message?.includes('401') || error?.message?.includes('API key')) {
+      } else if (error?.message?.includes('400') || error?.message?.includes('401') || error?.message?.includes('API key not valid') || error?.message?.includes('API_KEY_INVALID')) {
         errorMessage = 'API 키가 유효하지 않습니다. 설정을 확인해주세요.';
       } else if (error?.message) {
         errorMessage = `오류: ${error.message}`;
       }
       
-      throw new Error(errorMessage);
+      // 원본 에러 정보를 포함한 에러 객체 생성 (API 라우트에서 자동 전환을 위해)
+      const enhancedError: any = new Error(errorMessage);
+      enhancedError.originalMessage = originalMessage;
+      enhancedError.originalStatus = originalStatus;
+      enhancedError.status = originalStatus;
+      
+      throw enhancedError;
     }
   }
 
@@ -356,22 +336,60 @@ Translate the following text:`;
       const model = this.genAI.getGenerativeModel({ 
         model: 'gemini-2.5-flash', // 요약에는 빠른 flash 모델 사용
         generationConfig: {
-          maxOutputTokens: 500, // 요약은 간결하게
+          maxOutputTokens: 2048, // 요약을 위해 충분한 토큰 할당
+          temperature: 0.7, // 창의성과 일관성의 균형
         }
       });
 
+      console.log('📝 요약 요청 시작...');
       const result = await model.generateContent(prompt);
       const response = await result.response;
-      const summary = response.text();
+      
+      // 응답 확인
+      if (!response) {
+        console.error('❌ 응답 객체가 없습니다');
+        throw new Error('응답 객체가 없습니다');
+      }
 
-      if (!summary || summary.trim().length === 0) {
+      const candidates = response.candidates;
+      if (!candidates || candidates.length === 0) {
+        console.error('❌ 응답 후보가 없습니다');
+        const finishReason = response.candidates?.[0]?.finishReason;
+        throw new Error(`응답 후보가 없습니다. Finish reason: ${finishReason || 'unknown'}`);
+      }
+
+      const candidate = candidates[0];
+      if (candidate.finishReason !== 'STOP' && candidate.finishReason !== 'MAX_TOKENS') {
+        console.warn(`⚠️ 비정상적인 종료 이유: ${candidate.finishReason}`);
+      }
+
+      // response.text()를 사용하는 것이 더 안전함 (chat 메서드와 동일한 방식)
+      let summary: string;
+      try {
+        summary = response.text();
+      } catch (textError) {
+        // text() 메서드가 실패하면 parts를 직접 확인
+        console.warn('response.text() 실패, parts 직접 확인 시도...');
+        const parts = candidate.content?.parts;
+        if (!parts || parts.length === 0) {
+          console.error('❌ 응답 파트가 없습니다');
+          console.error('Response structure:', JSON.stringify(response, null, 2));
+          throw new Error('응답 파트가 없습니다');
+        }
+        summary = parts.map((part: any) => part.text || '').join('').trim();
+      }
+
+      if (!summary || summary.length === 0) {
+        console.error('❌ 요약 텍스트가 비어있습니다');
         throw new Error('요약 생성 실패: 빈 응답');
       }
 
-      return summary.trim();
+      console.log(`✅ 요약 완료 (길이: ${summary.length}자)`);
+      return summary;
     } catch (error: any) {
       console.error('Summarize Error:', error);
-      throw new Error(`요약 생성 실패: ${error.message}`);
+      const errorMessage = error?.message || '알 수 없는 오류';
+      throw new Error(`요약 생성 실패: ${errorMessage}`);
     }
   }
 
@@ -391,7 +409,7 @@ export function getGeminiClient(): GeminiClient {
     if (!apiKey) {
       throw new Error('GOOGLE_GEMINI_API_KEY environment variable is not set');
     }
-    clientInstance = new GeminiClient({ apiKey });
+    clientInstance = new GeminiClient(apiKey);
   }
   return clientInstance;
 }

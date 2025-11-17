@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useCallback, useRef } from 'react';
 import { X } from 'lucide-react';
 
 interface MobileDrawerProps {
@@ -31,7 +31,14 @@ export const MobileDrawer: React.FC<MobileDrawerProps> = ({
   }, [isOpen]);
 
   // Handle swipe down to close (for bottom drawer)
-  const handleTouchStart = (e: React.TouchEvent) => {
+  const touchHandlersRef = useRef<{
+    handleTouchMove: ((e: TouchEvent) => void) | null;
+    handleTouchEnd: (() => void) | null;
+  }>({ handleTouchMove: null, handleTouchEnd: null });
+
+  const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    if (position !== 'bottom') return;
+    
     const touch = e.touches[0];
     const startY = touch.clientY;
 
@@ -40,17 +47,49 @@ export const MobileDrawer: React.FC<MobileDrawerProps> = ({
       const diff = currentTouch.clientY - startY;
 
       // Swipe down more than 100px to close
-      if (diff > 100 && position === 'bottom') {
+      if (diff > 100) {
         onClose();
-        document.removeEventListener('touchmove', handleTouchMove);
+        // Cleanup
+        if (touchHandlersRef.current.handleTouchMove) {
+          document.removeEventListener('touchmove', touchHandlersRef.current.handleTouchMove);
+        }
+        if (touchHandlersRef.current.handleTouchEnd) {
+          document.removeEventListener('touchend', touchHandlersRef.current.handleTouchEnd);
+        }
+        touchHandlersRef.current.handleTouchMove = null;
+        touchHandlersRef.current.handleTouchEnd = null;
       }
     };
 
+    const handleTouchEnd = () => {
+      if (touchHandlersRef.current.handleTouchMove) {
+        document.removeEventListener('touchmove', touchHandlersRef.current.handleTouchMove);
+      }
+      if (touchHandlersRef.current.handleTouchEnd) {
+        document.removeEventListener('touchend', touchHandlersRef.current.handleTouchEnd);
+      }
+      touchHandlersRef.current.handleTouchMove = null;
+      touchHandlersRef.current.handleTouchEnd = null;
+    };
+
+    touchHandlersRef.current.handleTouchMove = handleTouchMove;
+    touchHandlersRef.current.handleTouchEnd = handleTouchEnd;
+
     document.addEventListener('touchmove', handleTouchMove);
-    document.addEventListener('touchend', () => {
-      document.removeEventListener('touchmove', handleTouchMove);
-    }, { once: true });
-  };
+    document.addEventListener('touchend', handleTouchEnd, { once: true });
+  }, [onClose, position]);
+
+  // Cleanup on unmount or when drawer closes
+  useEffect(() => {
+    return () => {
+      if (touchHandlersRef.current.handleTouchMove) {
+        document.removeEventListener('touchmove', touchHandlersRef.current.handleTouchMove);
+      }
+      if (touchHandlersRef.current.handleTouchEnd) {
+        document.removeEventListener('touchend', touchHandlersRef.current.handleTouchEnd);
+      }
+    };
+  }, [isOpen]);
 
   const positionClasses = {
     left: 'left-0 top-0 bottom-0 w-80 max-w-[85vw]',

@@ -22,7 +22,7 @@ export const MemoryModal: React.FC<MemoryModalProps> = ({
 
   return (
     <div 
-      className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+      className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[100] p-4"
       onClick={onClose}
     >
       <div 
@@ -69,14 +69,21 @@ export const MemoryModal: React.FC<MemoryModalProps> = ({
               </div>
             </>
           ) : (
-            <div className="text-center py-12">
-              <BookOpen size={48} className="mx-auto mb-4 text-[var(--text-tertiary)] opacity-50" />
-              <p className="text-[var(--text-secondary)] text-lg mb-2">
+            <div className="flex flex-col items-center justify-center min-h-[400px] py-16">
+              <div className="mb-6 p-6 bg-[var(--bg-tertiary)] rounded-full">
+                <BookOpen size={64} className="text-[var(--accent-blue)]" />
+              </div>
+              <h3 className="text-2xl font-bold text-[var(--text-primary)] mb-3">
                 아직 저장된 메모리가 없습니다
-              </p>
-              <p className="text-sm text-[var(--text-tertiary)]">
+              </h3>
+              <p className="text-base text-[var(--text-secondary)] mb-6 max-w-md text-center">
                 10턴(20개 메시지)마다 자동으로 메모리가 생성됩니다.
               </p>
+              <div className="px-6 py-3 bg-[var(--bg-tertiary)] rounded-lg border border-[var(--border-color)]">
+                <p className="text-sm text-[var(--text-secondary)]">
+                  현재 메시지 수: <span className="font-semibold text-[var(--text-primary)]">{totalMessages}개</span>
+                </p>
+              </div>
             </div>
           )}
         </div>
@@ -84,4 +91,5 @@ export const MemoryModal: React.FC<MemoryModalProps> = ({
     </div>
   );
 };
+
 
