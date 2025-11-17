@@ -311,7 +311,7 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
             </div>
           </div>
         ) : (
-          <div className={`${editingMessageIndex !== null ? 'max-w-full px-2' : 'max-w-5xl'} mx-auto space-y-[50px]`}>
+          <div className={`${editingMessageIndex !== null ? 'max-w-full px-2' : 'max-w-5xl'} mx-auto space-y-[80px]`}>
             {messages.map((message, index) => {
               const displayContent =
                 outputSpeed !== 'instant' &&

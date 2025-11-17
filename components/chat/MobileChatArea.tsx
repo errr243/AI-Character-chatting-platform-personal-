@@ -265,7 +265,7 @@ export const MobileChatArea: React.FC<MobileChatAreaProps> = ({
             </div>
           </div>
         ) : (
-          <div className="space-y-[50px]">
+          <div className="space-y-[80px]">
             {messages.map((message, index) => {
               const displayContent =
                 outputSpeed !== 'instant' &&
