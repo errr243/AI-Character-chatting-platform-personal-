@@ -326,10 +326,10 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
                   className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'} stagger-item`}
                 >
                   <div
-                    className={`group px-5 py-4 transition-all duration-300 ${
+                    className={`group transition-all duration-300 ${
                       editingMessageIndex === index
-                        ? 'w-full max-w-full'
-                        : 'max-w-[85%]'
+                        ? 'w-full max-w-full px-6 py-5'
+                        : 'max-w-[85%] px-7 py-5'
                     } ${
                       message.role === 'user'
                         ? 'bg-gradient-to-br from-[var(--accent-primary)] to-[var(--accent-secondary)] text-white shadow-lg hover:shadow-xl'

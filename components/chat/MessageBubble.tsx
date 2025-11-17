@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeRaw from 'rehype-raw';
@@ -16,7 +16,7 @@ interface MessageBubbleProps {
   onEditingChange?: (isEditing: boolean) => void;
 }
 
-export const MessageBubble: React.FC<MessageBubbleProps> = ({
+export const MessageBubble: React.FC<MessageBubbleProps> = React.memo(({
   content,
   isUser,
   characterName,
@@ -28,6 +28,14 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
   const [isEditing, setIsEditing] = useState(false);
   const [editedContent, setEditedContent] = useState(content);
   const [copied, setCopied] = useState(false);
+
+  // setTimeout cleanup for copied state
+  useEffect(() => {
+    if (copied) {
+      const timeoutId = setTimeout(() => setCopied(false), 2000);
+      return () => clearTimeout(timeoutId);
+    }
+  }, [copied]);
 
   const handleImageError = (src: string) => {
     setImageErrors((prev) => new Set(prev).add(src));
@@ -63,7 +71,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
     try {
       await navigator.clipboard.writeText(content);
       setCopied(true);
-      setTimeout(() => setCopied(false), 2000); // 2초 후 복사 완료 표시 제거
+      // useEffect에서 cleanup 처리됨
     } catch (error) {
       console.error('복사 실패:', error);
       // 폴백: 텍스트 영역에 복사
@@ -77,7 +85,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
         document.execCommand('copy');
         document.body.removeChild(textArea);
         setCopied(true);
-        setTimeout(() => setCopied(false), 2000);
+        // useEffect에서 cleanup 처리됨
       } catch (fallbackError) {
         console.error('폴백 복사도 실패:', fallbackError);
       }
@@ -145,7 +153,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
           </div>
         </div>
       ) : isUser ? (
-        <div className="whitespace-pre-wrap break-words text-sm leading-relaxed">
+        <div className="whitespace-pre-wrap break-words text-sm leading-relaxed px-1">
           {content}
         </div>
       ) : (
@@ -369,5 +377,11 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
       )}
     </>
   );
-};
-
+}, (prevProps, nextProps) => {
+  // 내용/역할/캐릭터 이름이 바뀔 때만 실제로 다시 렌더링
+  return (
+    prevProps.content === nextProps.content &&
+    prevProps.isUser === nextProps.isUser &&
+    prevProps.characterName === nextProps.characterName
+  );
+});

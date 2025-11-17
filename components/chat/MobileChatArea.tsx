@@ -280,7 +280,7 @@ export const MobileChatArea: React.FC<MobileChatAreaProps> = ({
                   className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'} stagger-item`}
                 >
                   <div
-                    className={`px-4 py-3 max-w-[85%] transition-all duration-300 ${
+                    className={`px-5 py-4 max-w-[85%] transition-all duration-300 ${
                       message.role === 'user'
                         ? 'bg-gradient-to-br from-[var(--accent-primary)] to-[var(--accent-secondary)] text-white shadow-lg'
                         : 'glass-card rounded-2xl'
