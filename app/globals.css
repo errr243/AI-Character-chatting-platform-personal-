@@ -137,6 +137,7 @@ input::placeholder, textarea::placeholder {
 button {
   font-family: inherit;
   font-weight: 500;
+  border-radius: 9999px; /* 기본은 부드러운 필 형태 (신규 UI) */
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
@@ -327,7 +328,7 @@ button:not(:disabled):active {
   background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
   color: white;
   border: none;
-  border-radius: 12px;
+  border-radius: 9999px; /* 주요 액션 버튼도 통일된 필 형태 */
   padding: 12px 24px;
   font-weight: 600;
   box-shadow: 0 4px 16px var(--accent-glow);
@@ -341,6 +342,19 @@ button:not(:disabled):active {
 
 .btn-accent:active:not(:disabled) {
   transform: translateY(-1px);
+}
+
+/* Classic UI overrides (구형 UI용) */
+body.ui-classic button {
+  border-radius: 8px;
+}
+
+body.ui-classic .btn-accent {
+  border-radius: 12px;
+}
+
+body.ui-classic .glass-card {
+  border-radius: 12px;
 }
 
 /* Smooth Page Transitions */

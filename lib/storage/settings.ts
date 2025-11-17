@@ -3,12 +3,15 @@ export type OutputSpeed = 'instant' | 'fast' | 'medium' | 'slow';
 export type MaxOutputTokens = 256 | 512 | 1024 | 2048 | 4096 | 6144 | 8192; // 토큰 수 (최소 256)
 export type ThinkingBudget = 128 | 512 | 1024 | 2048 | 32768 | -1 | undefined; // 토큰 수 (Pro: 128~32768, -1=동적), undefined는 API 기본값
 export type MaxActiveLorebooks = 3 | 5 | 8 | 10;
+export type UIStyle = 'modern' | 'classic';
 
 export interface ChatSettings {
   outputSpeed: OutputSpeed;
   maxOutputTokens: MaxOutputTokens;
   thinkingBudget: ThinkingBudget;
   maxActiveLorebooks: MaxActiveLorebooks;
+  autoScroll: boolean; // 자동 스크롤 활성화 여부
+  uiStyle: UIStyle; // UI 스타일 (modern: 신형, classic: 구형)
 }
 
 const STORAGE_KEY = 'chat_settings';
@@ -17,6 +20,8 @@ const DEFAULT_SETTINGS: ChatSettings = {
   maxOutputTokens: 8192, // 제한 없음
   thinkingBudget: 1024, // 기본값: 중간 정도의 사고 품질
   maxActiveLorebooks: 5, // 기본값: 5개
+  autoScroll: true, // 기본값: 자동 스크롤 활성화
+  uiStyle: 'modern', // 기본값: 신형 UI
 };
 
 export function loadSettings(): ChatSettings {
@@ -64,6 +69,16 @@ export function loadSettings(): ChatSettings {
       if (!validValues.includes(settings.maxActiveLorebooks)) {
         settings.maxActiveLorebooks = 5;
       }
+    }
+    
+    // autoScroll 마이그레이션
+    if (settings.autoScroll === undefined) {
+      settings.autoScroll = true;
+    }
+
+    // uiStyle 마이그레이션
+    if (settings.uiStyle === undefined || !['modern', 'classic'].includes(settings.uiStyle)) {
+      settings.uiStyle = 'modern';
     }
     
     return { ...DEFAULT_SETTINGS, ...settings };

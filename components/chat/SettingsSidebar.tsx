@@ -1,8 +1,8 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Bot, PenSquare, SlidersHorizontal, Zap, MessageSquare, Brain, BookOpen, ChevronRight, FileText, Download, Upload, Key, Plus, Trash2, Check, ChevronLeft, GripVertical } from 'lucide-react';
-import { loadSettings, saveSettings, type OutputSpeed, type MaxOutputTokens, type ThinkingBudget, type MaxActiveLorebooks } from '@/lib/storage/settings';
+import { Bot, PenSquare, SlidersHorizontal, Zap, MessageSquare, Brain, BookOpen, ChevronRight, FileText, Download, Upload, Key, Plus, Trash2, Check, ChevronLeft, GripVertical, ArrowDown, Sparkles } from 'lucide-react';
+import { loadSettings, saveSettings, updateSettings, type OutputSpeed, type MaxOutputTokens, type ThinkingBudget, type MaxActiveLorebooks, type UIStyle } from '@/lib/storage/settings';
 import { MemoryModal } from './MemoryModal';
 import { loadApiKeys, addApiKey, deleteApiKey, updateApiKey, getActiveApiKey, setSelectedApiKeyId, getSelectedApiKeyId, type ApiKeyInfo } from '@/lib/storage/apiKeys';
 import { LorebookManager } from './LorebookManager';
@@ -15,6 +15,8 @@ interface SettingsSidebarProps {
   maxOutputTokens: MaxOutputTokens;
   thinkingBudget: ThinkingBudget;
   maxActiveLorebooks: MaxActiveLorebooks;
+  autoScroll: boolean;
+  uiStyle: UIStyle;
   contextSummary?: string;
   lastSummaryAt?: number;
   totalMessages: number;
@@ -28,7 +30,9 @@ interface SettingsSidebarProps {
   onMaxOutputTokensChange: (tokens: MaxOutputTokens) => void;
   onThinkingBudgetChange: (budget: ThinkingBudget) => void;
   onMaxActiveLorebooksChange: (max: MaxActiveLorebooks) => void;
+  onAutoScrollChange: (enabled: boolean) => void;
   onUserNoteChange: (note: string) => void;
+  onUIStyleChange: (style: UIStyle) => void;
   onToggle?: () => void;
   onResizeStart?: (e: React.MouseEvent) => void;
 }
@@ -41,6 +45,8 @@ export const SettingsSidebar: React.FC<SettingsSidebarProps> = ({
   maxOutputTokens,
   thinkingBudget,
   maxActiveLorebooks,
+  autoScroll,
+  uiStyle,
   contextSummary,
   lastSummaryAt,
   totalMessages,
@@ -54,7 +60,9 @@ export const SettingsSidebar: React.FC<SettingsSidebarProps> = ({
   onMaxOutputTokensChange,
   onThinkingBudgetChange,
   onMaxActiveLorebooksChange,
+  onAutoScrollChange,
   onUserNoteChange,
+  onUIStyleChange,
   onToggle,
   onResizeStart,
 }) => {
@@ -75,6 +83,7 @@ export const SettingsSidebar: React.FC<SettingsSidebarProps> = ({
         onMaxOutputTokensChange(settings.maxOutputTokens);
         onThinkingBudgetChange(settings.thinkingBudget);
         onMaxActiveLorebooksChange(settings.maxActiveLorebooks);
+        onAutoScrollChange(settings.autoScroll);
         
         // API 키 목록 로드
         const keys = loadApiKeys();
@@ -96,20 +105,27 @@ export const SettingsSidebar: React.FC<SettingsSidebarProps> = ({
 
   const handleOutputSpeedChange = (speed: OutputSpeed) => {
     onOutputSpeedChange(speed);
-    const settings = loadSettings();
-    saveSettings({ ...settings, outputSpeed: speed });
+    updateSettings({ outputSpeed: speed });
   };
 
   const handleMaxOutputTokensChange = (tokens: MaxOutputTokens) => {
     onMaxOutputTokensChange(tokens);
-    const settings = loadSettings();
-    saveSettings({ ...settings, maxOutputTokens: tokens });
+    updateSettings({ maxOutputTokens: tokens });
   };
 
   const handleThinkingBudgetChange = (budget: ThinkingBudget) => {
     onThinkingBudgetChange(budget);
-    const settings = loadSettings();
-    saveSettings({ ...settings, thinkingBudget: budget });
+    updateSettings({ thinkingBudget: budget });
+  };
+
+  const handleAutoScrollChange = (enabled: boolean) => {
+    onAutoScrollChange(enabled);
+    updateSettings({ autoScroll: enabled });
+  };
+
+  const handleUIStyleChangeInternal = (style: UIStyle) => {
+    onUIStyleChange(style);
+    updateSettings({ uiStyle: style });
   };
 
   // 데이터 내보내기
@@ -354,6 +370,69 @@ export const SettingsSidebar: React.FC<SettingsSidebarProps> = ({
             {outputSpeed === 'fast' && '타이핑 효과 (빠름)'}
             {outputSpeed === 'medium' && '타이핑 효과 (보통)'}
             {outputSpeed === 'slow' && '타이핑 효과 (느림)'}
+          </p>
+        </div>
+
+        {/* UI 스타일 토글 (신규 / 구형) */}
+        <div>
+          <label className="block text-sm font-semibold text-[var(--text-secondary)] mb-2 flex items-center gap-2">
+            <Sparkles size={16} />
+            UI 스타일
+          </label>
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={() => handleUIStyleChangeInternal('modern')}
+              className={`px-3 py-2 text-xs font-medium rounded-lg border transition-all duration-200 ${
+                uiStyle === 'modern'
+                  ? 'bg-[var(--accent-primary)]/90 text-white border-transparent shadow-sm'
+                  : 'bg-[var(--bg-tertiary)] text-[var(--text-secondary)] border-[var(--border-color)] hover:border-[var(--border-hover)]'
+              }`}
+            >
+              신규 UI
+            </button>
+            <button
+              type="button"
+              onClick={() => handleUIStyleChangeInternal('classic')}
+              className={`px-3 py-2 text-xs font-medium rounded-lg border transition-all duration-200 ${
+                uiStyle === 'classic'
+                  ? 'bg-[var(--accent-primary)]/90 text-white border-transparent shadow-sm'
+                  : 'bg-[var(--bg-tertiary)] text-[var(--text-secondary)] border-[var(--border-color)] hover:border-[var(--border-hover)]'
+              }`}
+            >
+              구형 UI
+            </button>
+          </div>
+          <p className="text-xs text-[var(--text-tertiary)] mt-1">
+            버튼 모양과 카드 스타일을 기존 디자인 / 신규 디자인으로 전환합니다.
+          </p>
+        </div>
+
+        {/* 자동 스크롤 */}
+        <div>
+          <label className="block text-sm font-semibold text-[var(--text-secondary)] mb-2 flex items-center gap-2">
+            <ArrowDown size={16} />
+            자동 스크롤
+          </label>
+          <div className="flex items-center justify-between p-3 bg-[var(--bg-tertiary)] border border-[var(--border-color)] rounded-md">
+            <span className="text-sm text-[var(--text-primary)]">
+              {autoScroll ? '활성화됨' : '비활성화됨'}
+            </span>
+            <button
+              onClick={() => handleAutoScrollChange(!autoScroll)}
+              className={`relative w-11 h-6 rounded-full transition-colors duration-200 ${
+                autoScroll ? 'bg-[var(--accent-blue)]' : 'bg-[var(--bg-primary)] border border-[var(--border-color)]'
+              }`}
+            >
+              <span
+                className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow-md transition-transform duration-200 ${
+                  autoScroll ? 'translate-x-5' : 'translate-x-0'
+                }`}
+              />
+            </button>
+          </div>
+          <p className="text-xs text-[var(--text-tertiary)] mt-1">
+            {autoScroll ? '새 메시지가 추가될 때 자동으로 맨 아래로 스크롤합니다' : '자동 스크롤이 비활성화되어 있습니다'}
           </p>
         </div>
 

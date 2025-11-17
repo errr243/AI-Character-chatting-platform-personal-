@@ -2,17 +2,19 @@
 
 import React from 'react';
 import { Bot, Zap, Brain, BookOpen, Download, Upload } from 'lucide-react';
-import type { OutputSpeed, MaxOutputTokens, ThinkingBudget } from '@/lib/storage/settings';
+import type { OutputSpeed, MaxOutputTokens, ThinkingBudget, UIStyle } from '@/lib/storage/settings';
 
 interface MobileSettingsProps {
   model: 'gemini-flash' | 'gemini-pro';
   outputSpeed: OutputSpeed;
   maxOutputTokens: MaxOutputTokens;
   thinkingBudget: ThinkingBudget;
+  uiStyle: UIStyle;
   onModelChange: (model: 'gemini-flash' | 'gemini-pro') => void;
   onOutputSpeedChange: (speed: OutputSpeed) => void;
   onMaxOutputTokensChange: (tokens: MaxOutputTokens) => void;
   onThinkingBudgetChange: (budget: ThinkingBudget) => void;
+  onUIStyleChange: (style: UIStyle) => void;
   onExportData?: () => void;
   onImportData?: () => void;
 }
@@ -22,15 +24,45 @@ export const MobileSettings: React.FC<MobileSettingsProps> = ({
   outputSpeed,
   maxOutputTokens,
   thinkingBudget,
+  uiStyle,
   onModelChange,
   onOutputSpeedChange,
   onMaxOutputTokensChange,
   onThinkingBudgetChange,
+  onUIStyleChange,
   onExportData,
   onImportData,
 }) => {
   return (
     <div className="p-5 space-y-6">
+      {/* UI Style */}
+      <div>
+        <label className="block text-sm font-semibold text-[var(--text-secondary)] mb-3">
+          UI 스타일
+        </label>
+        <div className="grid grid-cols-2 gap-3">
+          <button
+            onClick={() => onUIStyleChange('modern')}
+            className={`p-3 rounded-xl text-center text-xs font-medium transition-all duration-300 ${
+              uiStyle === 'modern'
+                ? 'bg-gradient-to-br from-[var(--accent-primary)] to-[var(--accent-secondary)] text-white shadow-md'
+                : 'glass-card hover:border-[var(--border-hover)] text-[var(--text-secondary)]'
+            }`}
+          >
+            신규 UI
+          </button>
+          <button
+            onClick={() => onUIStyleChange('classic')}
+            className={`p-3 rounded-xl text-center text-xs font-medium transition-all duration-300 ${
+              uiStyle === 'classic'
+                ? 'bg-gradient-to-br from-[var(--accent-primary)] to-[var(--accent-secondary)] text-white shadow-md'
+                : 'glass-card hover:border-[var(--border-hover)] text-[var(--text-secondary)]'
+            }`}
+          >
+            구형 UI
+          </button>
+        </div>
+      </div>
       {/* AI Model */}
       <div>
         <label className="block text-sm font-semibold text-[var(--text-secondary)] mb-3 flex items-center gap-2">

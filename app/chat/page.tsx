@@ -11,7 +11,7 @@ import { MobileSettings } from '@/components/chat/MobileSettings';
 import type { ChatMessage, Character } from '@/lib/gemini/types';
 import { buildCharacterPrompt } from '@/lib/gemini/promptBuilder';
 import { loadCharacters, initializeDefaultCharacters } from '@/lib/storage/characters';
-import { loadSettings, saveSettings, type OutputSpeed, type MaxOutputTokens, type ThinkingBudget, type MaxActiveLorebooks } from '@/lib/storage/settings';
+import { loadSettings, saveSettings, type OutputSpeed, type MaxOutputTokens, type ThinkingBudget, type MaxActiveLorebooks, type UIStyle } from '@/lib/storage/settings';
 import { loadLorebooks, detectKeywords } from '@/lib/storage/lorebook';
 import {
   loadChatHistorySummaries,
@@ -42,6 +42,8 @@ export default function ChatPage() {
   const [maxOutputTokens, setMaxOutputTokens] = useState<MaxOutputTokens>(8192);
   const [thinkingBudget, setThinkingBudget] = useState<ThinkingBudget>(undefined);
   const [maxActiveLorebooks, setMaxActiveLorebooks] = useState<MaxActiveLorebooks>(5);
+  const [autoScroll, setAutoScroll] = useState<boolean>(true);
+  const [uiStyle, setUIStyle] = useState<UIStyle>('modern');
   const [isSettingsCollapsed, setIsSettingsCollapsed] = useState(() => {
     if (typeof window === 'undefined') return false;
     const saved = localStorage.getItem('settings_sidebar_collapsed');
@@ -67,6 +69,8 @@ export default function ChatPage() {
     setMaxOutputTokens(settings.maxOutputTokens);
     setThinkingBudget(settings.thinkingBudget);
     setMaxActiveLorebooks(settings.maxActiveLorebooks);
+    setAutoScroll(settings.autoScroll);
+    setUIStyle(settings.uiStyle);
     
     // API 키는 설정 UI에서 수동으로 추가하거나, 환경 변수로 관리
     // 보안을 위해 코드에 하드코딩하지 않음
@@ -115,6 +119,15 @@ export default function ChatPage() {
       setHasMoreMessages(false);
     }
   }, []);
+
+  // UI 스타일 변경 시 body 클래스 업데이트
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+    const body = document.body;
+    body.classList.remove('ui-modern', 'ui-classic');
+    const className = uiStyle === 'classic' ? 'ui-classic' : 'ui-modern';
+    body.classList.add(className);
+  }, [uiStyle]);
 
   // 페이지 포커스 시 캐릭터 목록 새로고침
   useEffect(() => {
@@ -299,13 +312,23 @@ export default function ChatPage() {
   const summarizeContext = async () => {
     if (!currentHistory) return;
     
+    // 전체 히스토리를 localStorage에서 가져오기
+    const fullHistory = loadChatHistoryById(currentHistory.id);
+    if (!fullHistory) return;
+    
     const MESSAGES_THRESHOLD = 20; // 10턴
-    // 마지막 20개를 제외한 모든 메시지를 요약
-    const messagesToSummarize = currentHistory.messages.slice(0, -MESSAGES_THRESHOLD);
+    const lastSummaryIndex = fullHistory.lastSummaryAt || 0;
+    
+    // 이미 요약된 부분 이후의 메시지만 가져오기
+    // 마지막 20개는 제외 (최근 대화는 그대로 유지)
+    const messagesToSummarize = fullHistory.messages.slice(
+      lastSummaryIndex,
+      fullHistory.messages.length - MESSAGES_THRESHOLD
+    );
     
     if (messagesToSummarize.length === 0) return;
     
-    console.log(`📝 이전 대화 요약 중... (${messagesToSummarize.length}개 메시지)`);
+    console.log(`📝 이전 대화 요약 중... (${messagesToSummarize.length}개 메시지, 시작 인덱스: ${lastSummaryIndex})`);
     
     try {
       const response = await fetch('/api/summarize', {
@@ -313,8 +336,8 @@ export default function ChatPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           messages: messagesToSummarize,
-          existingSummary: currentHistory.contextSummary,
-          characterName: currentHistory.characterName,
+          existingSummary: fullHistory.contextSummary,
+          characterName: fullHistory.characterName,
         }),
       });
       
@@ -324,17 +347,24 @@ export default function ChatPage() {
       
       const { summary } = await response.json();
       
-      // 요약을 히스토리에 저장
+      // 전체 히스토리를 업데이트하여 저장
+      const updated = {
+        ...fullHistory,
+        contextSummary: summary,
+        lastSummaryAt: fullHistory.messages.length - MESSAGES_THRESHOLD,
+      };
+      
+      // 즉시 localStorage에 저장
+      saveChatHistory(updated);
+      
+      // currentHistory도 업데이트 (메모리에는 최근 10개만 유지)
       setCurrentHistory(prev => {
         if (!prev) return prev;
-        const updated = {
+        return {
           ...prev,
           contextSummary: summary,
-          lastSummaryAt: prev.messages.length,
+          lastSummaryAt: updated.lastSummaryAt,
         };
-        // 즉시 localStorage에 저장
-        saveChatHistory(updated);
-        return updated;
       });
       
       console.log('✅ 컨텍스트 요약 완료:', summary.substring(0, 80) + '...');
@@ -617,9 +647,24 @@ export default function ChatPage() {
     saveSettings({ ...settings, maxActiveLorebooks: max });
   };
 
-  // 이전 메시지 로드 함수
+  // 이전 메시지 로드 함수 (메모리 최적화: 최대 50개 메시지만 메모리에 유지)
   const handleLoadPreviousMessages = useCallback(() => {
     if (!currentHistory || !hasMoreMessages) return;
+    
+    const MAX_MESSAGES_IN_MEMORY = 50;
+    const currentMessageCount = currentHistory.messages.length;
+    
+    // 메모리에 너무 많은 메시지가 있으면 오래된 메시지 제거
+    if (currentMessageCount >= MAX_MESSAGES_IN_MEMORY) {
+      // 최근 40개 메시지만 유지하고 오래된 메시지 제거
+      const messagesToKeep = currentHistory.messages.slice(-40);
+      setCurrentHistory(prev => prev ? { ...prev, messages: messagesToKeep } : null);
+      // 인덱스 조정
+      const newStartIndex = Math.max(0, loadedMessageStartIndex - (currentMessageCount - 40));
+      setLoadedMessageStartIndex(newStartIndex);
+      setHasMoreMessages(newStartIndex > 0);
+      return;
+    }
     
     const previousStartIndex = Math.max(0, loadedMessageStartIndex - 10);
     const previousMessages = loadChatHistoryMessages(
@@ -632,9 +677,20 @@ export default function ChatPage() {
       // 이전 메시지를 현재 메시지 앞에 추가
       setCurrentHistory((prev) => {
         if (!prev) return prev;
+        const newMessages = [...previousMessages, ...prev.messages];
+        
+        // 메모리 제한 확인
+        if (newMessages.length > MAX_MESSAGES_IN_MEMORY) {
+          // 최근 50개만 유지
+          return {
+            ...prev,
+            messages: newMessages.slice(-MAX_MESSAGES_IN_MEMORY),
+          };
+        }
+        
         return {
           ...prev,
-          messages: [...previousMessages, ...prev.messages],
+          messages: newMessages,
         };
       });
       
@@ -783,7 +839,7 @@ export default function ChatPage() {
   };
 
   // 사이드바 리사이즈
-  const handleResizeStart = (e: React.MouseEvent) => {
+  const handleResizeStart = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
     const startX = e.clientX;
     const startWidth = settingsWidth;
@@ -808,7 +864,7 @@ export default function ChatPage() {
     document.addEventListener('mouseup', handleMouseUp);
     document.body.style.cursor = 'col-resize';
     document.body.style.userSelect = 'none';
-  };
+  }, [settingsWidth]);
 
   if (!currentHistory) {
     return (
@@ -842,6 +898,7 @@ export default function ChatPage() {
           isLoading={isLoading}
           characterName={currentHistory.characterName}
           outputSpeed={outputSpeed}
+          autoScroll={autoScroll}
           onTitleChange={handleTitleChange}
           onInputChange={setInput}
           onSend={handleSend}
@@ -859,9 +916,14 @@ export default function ChatPage() {
           maxOutputTokens={maxOutputTokens}
           thinkingBudget={thinkingBudget}
           maxActiveLorebooks={maxActiveLorebooks}
+          autoScroll={autoScroll}
+          uiStyle={uiStyle}
           contextSummary={currentHistory.contextSummary}
           lastSummaryAt={currentHistory.lastSummaryAt}
-          totalMessages={currentHistory.messages.length}
+          totalMessages={(() => {
+            const fullHistory = loadChatHistoryById(currentHistory.id);
+            return fullHistory?.messages.length || currentHistory.messages.length;
+          })()}
           userNote={currentHistory.userNote}
           isCollapsed={isSettingsCollapsed}
           width={settingsWidth}
@@ -872,7 +934,9 @@ export default function ChatPage() {
           onMaxOutputTokensChange={handleMaxOutputTokensChange}
           onThinkingBudgetChange={handleThinkingBudgetChange}
           onMaxActiveLorebooksChange={handleMaxActiveLorebooksChange}
+          onAutoScrollChange={setAutoScroll}
           onUserNoteChange={handleUserNoteChange}
+          onUIStyleChange={setUIStyle}
           onToggle={handleToggleSettings}
           onResizeStart={handleResizeStart}
         />
@@ -888,6 +952,7 @@ export default function ChatPage() {
             isLoading={isLoading}
             characterName={currentHistory.characterName}
             outputSpeed={outputSpeed}
+            autoScroll={autoScroll}
             onTitleChange={handleTitleChange}
             onInputChange={setInput}
             onSend={handleSend}
@@ -990,10 +1055,12 @@ export default function ChatPage() {
                 outputSpeed={outputSpeed}
                 maxOutputTokens={maxOutputTokens}
                 thinkingBudget={thinkingBudget}
+                uiStyle={uiStyle}
                 onModelChange={handleModelChange}
                 onOutputSpeedChange={handleOutputSpeedChange}
                 onMaxOutputTokensChange={handleMaxOutputTokensChange}
                 onThinkingBudgetChange={handleThinkingBudgetChange}
+                onUIStyleChange={setUIStyle}
                 onExportData={handleExportData}
                 onImportData={handleImportData}
               />
