@@ -11,8 +11,6 @@ const withPWA = require('next-pwa')({
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
-  // Turbopack을 사용할 때 경고가 뜨지 않도록 빈 설정을 명시
-  turbopack: {},
 };
 
 module.exports = withPWA(nextConfig);
