@@ -20,16 +20,33 @@ export async function POST(request: NextRequest) {
     console.log('Has custom API key:', !!apiKey);
     
     // 환경 변수에서 사용 가능한 API 키 개수 확인
-    const allEnvKeys = [
-      process.env.GOOGLE_GEMINI_API_KEY,
-      process.env.GOOGLE_GEMINI_API_KEY_2,
-      process.env.GOOGLE_GEMINI_API_KEY_3,
-      process.env.GOOGLE_GEMINI_API_KEY_4,
-      process.env.GOOGLE_GEMINI_API_KEY_5,
-    ].filter(Boolean) as string[];
+    const envKeyEntries = [
+      { key: process.env.GOOGLE_GEMINI_API_KEY, label: 'GOOGLE_GEMINI_API_KEY' },
+      { key: process.env.GOOGLE_GEMINI_API_KEY_2, label: 'GOOGLE_GEMINI_API_KEY_2' },
+      { key: process.env.GOOGLE_GEMINI_API_KEY_3, label: 'GOOGLE_GEMINI_API_KEY_3' },
+      { key: process.env.GOOGLE_GEMINI_API_KEY_4, label: 'GOOGLE_GEMINI_API_KEY_4' },
+      { key: process.env.GOOGLE_GEMINI_API_KEY_5, label: 'GOOGLE_GEMINI_API_KEY_5' },
+    ].filter((entry): entry is { key: string; label: string } => Boolean(entry.key));
+    
+    const allEnvKeys = envKeyEntries.map(entry => entry.key);
     
     // 클라이언트에서 전달된 모든 활성 API 키들
     const clientKeys = Array.isArray(clientApiKeys) ? clientApiKeys.filter(Boolean) : [];
+
+    // 키별 라벨 매핑 (로그 용도)
+    const keyLabelMap = new Map<string, string>();
+    envKeyEntries.forEach(entry => keyLabelMap.set(entry.key, entry.label));
+    clientKeys.forEach((key, index) => {
+      if (!keyLabelMap.has(key)) {
+        keyLabelMap.set(key, `클라이언트 키 #${index + 1}`);
+      }
+    });
+
+    const maskKey = (key?: string) => {
+      if (!key) return '없음';
+      if (key.length <= 8) return `${key.substring(0, 2)}...${key.substring(key.length - 2)}`;
+      return `${key.substring(0, 4)}...${key.substring(key.length - 4)}`;
+    };
     
     console.log(`📊 환경 변수에서 ${allEnvKeys.length}개의 API 키를 찾았습니다.`);
     console.log(`📊 클라이언트에서 ${clientKeys.length}개의 API 키를 받았습니다.`);
@@ -58,19 +75,24 @@ export async function POST(request: NextRequest) {
     
     if (allEnvKeys.length > 0) {
       // 환경 변수 키 우선 사용
-      selectedApiKey = allEnvKeys[0];
-      keySource = '환경 변수';
-      console.log(`🔑 환경 변수에서 API 키 선택: ${allEnvKeys.length}개 중 첫 번째 키 사용`);
+      const selectedEnvEntry = envKeyEntries[0];
+      selectedApiKey = selectedEnvEntry.key;
+      keySource = `환경 변수 (${selectedEnvEntry.label})`;
+      console.log(
+        `🔑 환경 변수에서 API 키 선택: ${selectedEnvEntry.label} (${maskKey(selectedEnvEntry.key)})`
+      );
     } else if (apiKey) {
       // 환경 변수 키가 없으면 클라이언트에서 선택한 키 사용
       selectedApiKey = apiKey;
       keySource = '클라이언트';
-      console.log('🔑 클라이언트에서 제공한 API 키 사용 (환경 변수 키 없음)');
+      console.log(`🔑 클라이언트에서 제공한 API 키 사용 (환경 변수 키 없음) - ${maskKey(apiKey)}`);
     } else if (clientKeys.length > 0) {
       // 클라이언트 키 배열에서 첫 번째 사용
       selectedApiKey = clientKeys[0];
       keySource = '클라이언트';
-      console.log(`🔑 클라이언트 키 배열에서 API 키 선택: ${clientKeys.length}개 중 첫 번째 키 사용`);
+      console.log(
+        `🔑 클라이언트 키 배열에서 API 키 선택: ${clientKeys.length}개 중 첫 번째 키 사용 (${maskKey(selectedApiKey)})`
+      );
     } else {
       console.warn('⚠️ API 키를 찾을 수 없습니다.');
     }
@@ -129,7 +151,8 @@ export async function POST(request: NextRequest) {
         const maskedKey = selectedApiKey 
           ? `${selectedApiKey.substring(0, 4)}...${selectedApiKey.substring(selectedApiKey.length - 4)}`
           : '없음';
-        console.log(`현재 사용 중인 키: ${maskedKey}`);
+        const keyLabel = keyLabelMap.get(selectedApiKey) || keySource || '알 수 없음';
+        console.log(`현재 사용 중인 키: ${keyLabel} (${maskedKey})`);
         
         // 현재 사용한 키를 제외한 나머지 키들
         // 모든 사용 가능한 키를 하나의 배열로 합치기
@@ -154,9 +177,12 @@ export async function POST(request: NextRequest) {
 
         for (let i = 0; i < fallbackKeys.length; i++) {
           const fallbackKey = fallbackKeys[i];
+          const fallbackLabel = keyLabelMap.get(fallbackKey) || `대체 키 #${i + 1}`;
           
           try {
-            console.log(`🔄 API 키 ${i + 1}/${fallbackKeys.length} 시도 중...`);
+            console.log(
+              `🔄 API 키 ${i + 1}/${fallbackKeys.length} 시도 중... (${fallbackLabel}, ${maskKey(fallbackKey)})`
+            );
             const fallbackClient = new GeminiClient(fallbackKey);
             response = await fallbackClient.chat({
               messages: messages as ChatMessage[],
