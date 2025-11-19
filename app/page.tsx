@@ -14,7 +14,7 @@ export default function Home() {
     <div className="h-screen flex items-center justify-center bg-[var(--bg-primary)]">
       <div className="text-[var(--text-secondary)]">
         채팅으로 이동 중...
+        </div>
       </div>
-    </div>
   );
 }

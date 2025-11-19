@@ -4,10 +4,10 @@
   "description": "Gemini 기반 AI 캐릭터 채팅 플랫폼",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "next dev --webpack",
     "build": "next build --webpack",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "eslint ."
   },
   "keywords": [],
   "author": "",

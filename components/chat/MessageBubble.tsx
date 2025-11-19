@@ -434,3 +434,5 @@ export const MessageBubble: React.FC<MessageBubbleProps> = React.memo(({
     prevProps.onReroll === nextProps.onReroll
   );
 });
+
+MessageBubble.displayName = 'MessageBubble';

@@ -104,11 +104,7 @@ export const MobileChatArea: React.FC<MobileChatAreaProps> = ({
     
     // 새 메시지가 추가되었고, 사용자가 메시지를 보낸 경우 항상 스크롤
     if (messagesIncreased && lastMessageIsUser) {
-      setIsNearBottom(true);
-      // 다음 프레임에서 스크롤 (리렌더링 후)
-      requestAnimationFrame(() => {
-        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-      });
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     } else if (isNearBottom && messages.length > 0) {
       // 사용자가 맨 아래에 있으면 스크롤 (메시지가 있을 때만)
       requestAnimationFrame(() => {
@@ -137,6 +133,7 @@ export const MobileChatArea: React.FC<MobileChatAreaProps> = ({
 
   // messages.length 변경 시 오래된 인덱스 정리
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setStreamingContent(prev => {
       const next = { ...prev };
       Object.keys(next).forEach(key => {
@@ -153,6 +150,7 @@ export const MobileChatArea: React.FC<MobileChatAreaProps> = ({
   // Streaming effect
   useEffect(() => {
     if (outputSpeed === 'instant') {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setStreamingContent({});
       return;
     }

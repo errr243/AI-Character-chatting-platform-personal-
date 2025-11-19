@@ -51,3 +51,5 @@ export const ChatHistoryItem: React.FC<ChatHistoryItemProps> = React.memo(({
   );
 });
 
+ChatHistoryItem.displayName = 'ChatHistoryItem';
+

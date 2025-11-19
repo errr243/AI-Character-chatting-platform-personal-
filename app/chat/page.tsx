@@ -61,6 +61,27 @@ export default function ChatPage() {
   const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
   const [showMemoryModal, setShowMemoryModal] = useState(false);
 
+  // 뷰포트 크기 감지를 위한 훅 추가
+  const [isMobile, setIsMobile] = useState(false);
+
+  // 뷰포트 크기 감지
+  useEffect(() => {
+    const checkIsMobile = () => {
+      setIsMobile(window.innerWidth <= 768);
+    };
+
+    // 초기 감지
+    checkIsMobile();
+
+    // resize 이벤트 리스너 추가
+    window.addEventListener('resize', checkIsMobile);
+
+    // cleanup
+    return () => {
+      window.removeEventListener('resize', checkIsMobile);
+    };
+  }, []);
+
   // 초기 로드
   useEffect(() => {
     initializeDefaultCharacters();
@@ -328,23 +349,29 @@ export default function ChatPage() {
         }
       }
 
+      // 요약 API 호출 - 새 메시지만 요약
       const response = await fetch('/api/summarize', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          messages: messagesToSummarize,
-          existingSummary: fullHistory.contextSummary || undefined,
+          messages: messagesToSummarize, // 새 메시지만 요약
+          existingSummary: fullHistory.contextSummary || undefined, // 기존 메모리와 병합
           characterName: fullHistory.characterName,
           userNote: fullHistory.userNote || undefined,
           apiKey: apiKeyForSummary,
         }),
       });
-      
+
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || '요약 API 호출 실패');
+        const errorText = await response.text();
+        try {
+          const errorData = JSON.parse(errorText);
+          throw new Error(errorData.error || `요약 API 호출 실패: ${response.statusText}`);
+        } catch (e) {
+          throw new Error(errorText || `요약 API 호출 실패: ${response.statusText}`);
+        }
       }
-      
+
       const { summary } = await response.json();
       
       // 전체 히스토리를 업데이트하여 저장
@@ -428,8 +455,13 @@ export default function ChatPage() {
       });
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || '요약 API 호출 실패');
+        const errorText = await response.text();
+        try {
+          const errorData = JSON.parse(errorText);
+          throw new Error(errorData.error || `요약 API 호출 실패: ${response.statusText}`);
+        } catch (e) {
+          throw new Error(errorText || `요약 API 호출 실패: ${response.statusText}`);
+        }
       }
 
       const { summary } = await response.json();
@@ -610,35 +642,20 @@ export default function ChatPage() {
       });
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        const errorMessage = errorData.error || `서버 오류 (${response.status})`;
-        
-        // 429 오류 발생 시 다음 API 키로 전환 시도
-        if (response.status === 429 && typeof window !== 'undefined') {
-          try {
-            const { getNextAvailableApiKey, markApiKeyQuotaExceeded, loadApiKeys, getActiveApiKey } = require('@/lib/storage/apiKeys');
-            const keys = loadApiKeys();
-            const activeKey = getActiveApiKey();
-            const currentKey = keys.find((k: any) => k.key === activeKey);
-            
-            if (currentKey) {
-              markApiKeyQuotaExceeded(currentKey.id);
-            }
-            
-            const nextKey = getNextAvailableApiKey(currentKey?.id);
-            if (nextKey && nextKey !== currentKey?.key) {
-              // 다음 키로 전환 후 재시도
-              console.log('🔄 할당량 초과로 다른 API 키로 전환 중...');
-              // 재시도는 사용자가 수동으로 해야 함
-              throw new Error('할당량 초과로 다른 API 키로 자동 전환했습니다. 다시 시도해주세요.');
-            }
-          } catch (switchError) {
-            // API 키 전환 실패 시 원래 오류 메시지 사용
-            console.error('API 키 전환 실패:', switchError);
-          }
+        // 백엔드에서 API 키 자동 전환 로직을 처리하므로 프론트엔드에서는 단순히 오류 메시지를 표시
+        if (response.status === 429) {
+          throw new Error('API 할당량이 초과되었습니다. 잠시 후 다시 시도해주세요.');
+        } else if (response.status === 403) {
+          throw new Error('API 키 오류가 발생했습니다. 설정을 확인해주세요.');
         }
         
-        throw new Error(errorMessage);
+        const errorText = await response.text();
+        try {
+          const errorData = JSON.parse(errorText);
+          throw new Error(errorData.error || `서버 오류 (${response.status})`);
+        } catch (e) {
+          throw new Error(errorText || `서버 오류 (${response.status})`);
+        }
       }
 
       const data = await response.json();
@@ -1351,7 +1368,7 @@ export default function ChatPage() {
                     history.id === currentHistory.id
                       ? 'glass-card border-[var(--accent-primary)] bg-[var(--bg-glass-hover)]'
                       : 'glass-card hover:border-[var(--border-hover)]'
-                  }`}
+                    }`}
                 >
                   {history.title}
                 </button>

@@ -1,20 +1,65 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import type { ChatRequest, ChatResponse, ChatMessage } from './types';
 
+interface ApiKeyStatus {
+  status: 'valid' | 'quota-exceeded' | 'invalid';
+  lastError?: Date;
+}
+
 export class GeminiClient {
   private genAI: GoogleGenerativeAI;
   private defaultModel: 'gemini-flash' | 'gemini-pro';
+  private availableKeys: string[];
+  private currentKeyIndex: number;
+  private keyStatus: Map<string, ApiKeyStatus>;
   private currentApiKey: string;
   private currentApiKeyId?: string;
 
-  constructor(apiKey: string, model: 'gemini-flash' | 'gemini-pro' = 'gemini-flash') {
-    if (!apiKey) {
-      throw new Error('GOOGLE_GEMINI_API_KEY is required');
+  // 현재 사용 중인 API 키 정보 확인용 메서드
+  getCurrentApiKeyInfo(): { key: string; index: number; total: number; maskedKey: string } {
+    return {
+      key: this.currentApiKey,
+      index: this.currentKeyIndex,
+      total: this.availableKeys.length,
+      maskedKey: this.maskKey(this.currentApiKey)
+    };
+  }
+
+  constructor(apiKeys: string | string[], model: 'gemini-flash' | 'gemini-pro' = 'gemini-flash') {
+    const keys = Array.isArray(apiKeys) ? apiKeys : [apiKeys];
+
+    if (!keys || keys.length === 0 || !keys.some(key => key)) {
+      throw new Error('최소한 하나의 유효한 API 키가 필요합니다');
     }
-    
-    this.currentApiKey = apiKey;
-    this.genAI = new GoogleGenerativeAI(apiKey);
+
+    // 유효한 키만 필터링
+    this.availableKeys = keys.filter(key => key);
+    this.currentKeyIndex = 0;
+    this.keyStatus = new Map();
+
+    // 초기 키 상태 설정
+    this.availableKeys.forEach(key => {
+      this.keyStatus.set(key, { status: 'valid' });
+    });
+
+    // 첫 번째 유효한 키 선택
+    const initialKey = this.getNextValidKey();
+    if (!initialKey) {
+      throw new Error('사용 가능한 유효한 API 키가 없습니다');
+    }
+    this.currentApiKey = initialKey;
+
+    this.genAI = new GoogleGenerativeAI(this.currentApiKey);
     this.defaultModel = model;
+
+    // 디버깅용 로그: 사용 가능한 키 정보 출력
+    console.log(`🚀 GeminiClient 초기화 완료`);
+    console.log(`🔑 총 ${this.availableKeys.length}개의 API 키가 등록됨`);
+    this.availableKeys.forEach((key, index) => {
+      const status = this.keyStatus.get(key);
+      console.log(`   [${index + 1}] ${this.maskKey(key)} - ${status?.status || 'unknown'}`);
+    });
+    console.log(`🔄 현재 사용 중인 키: ${this.maskKey(this.currentApiKey)} (인덱스: ${this.currentKeyIndex + 1}/${this.availableKeys.length})`);
   }
 
   // API 키 전환 메서드
@@ -24,58 +69,151 @@ export class GeminiClient {
     console.log('🔄 API 키가 전환되었습니다.');
   }
 
-  // 재시도 헬퍼 함수
+  // 유효한 다음 API 키 찾기
+  private getNextValidKey(): string | null {
+    if (this.availableKeys.length === 0) {
+      return null;
+    }
+
+    // 현재 인덱스 다음부터 시작하여 유효한 키 찾기
+    for (let i = 1; i <= this.availableKeys.length; i++) {
+      const index = (this.currentKeyIndex + i) % this.availableKeys.length;
+      const key = this.availableKeys[index];
+      const status = this.keyStatus.get(key);
+
+      if (status?.status === 'valid') {
+        this.currentKeyIndex = index; // 현재 인덱스 업데이트
+        return key;
+      }
+    }
+
+    // 모든 키가 유효하지 않은 경우
+    return null;
+  }
+
+  // 키 상태 업데이트
+  private updateKeyStatus(apiKey: string, status: 'valid' | 'quota-exceeded' | 'invalid'): void {
+    this.keyStatus.set(apiKey, {
+      status,
+      lastError: status !== 'valid' ? new Date() : undefined
+    });
+  }
+
+  // 특정 키가 현재 사용 불가능한지 확인
+  private isKeyUnavailable(apiKey: string): boolean {
+    const status = this.keyStatus.get(apiKey);
+    return status?.status !== 'valid';
+  }
+
+  // 재시도 헬퍼 함수 (API 키 전환 로직 포함)
   private async retryWithBackoff<T>(
     fn: () => Promise<T>,
     maxRetries: number = 3,
     baseDelay: number = 1000
   ): Promise<T> {
     let lastError: Error | null = null;
+    let attemptsOnCurrentKey = 0;
 
-    for (let attempt = 0; attempt < maxRetries; attempt++) {
+    while (true) {
       try {
         return await fn();
       } catch (error: any) {
         lastError = error;
-        
-        // 429 (quota exceeded) 오류는 재시도하지 않고 바로 throw
-        // API 라우트에서 다른 키로 전환하도록 함
-        const isQuotaExceeded = 
+
+        const isRetryable =
+          (error?.message?.includes('503') ||
+            error?.message?.includes('overloaded') ||
+            (error?.message?.includes('rate limit') && !error?.message?.includes('429')));
+
+        if (isRetryable && attemptsOnCurrentKey < maxRetries) {
+          attemptsOnCurrentKey++;
+          const delay = baseDelay * Math.pow(2, attemptsOnCurrentKey);
+          console.log(`API 요청 실패 (시도 ${attemptsOnCurrentKey}/${maxRetries}). ${delay}ms 후 재시도...`);
+          await new Promise(resolve => setTimeout(resolve, delay));
+          continue;
+        }
+
+        const isQuotaExceeded =
           error?.message?.includes('429') ||
           error?.message?.includes('quota') ||
           error?.message?.includes('Quota exceeded');
-        
+
+        const isInvalidKey =
+          error?.status === 400 ||
+          error?.status === 403 ||
+          error?.message?.includes('400') ||
+          error?.message?.includes('403') ||
+          error?.message?.includes('API key not valid') ||
+          error?.message?.includes('API_KEY_INVALID') ||
+          error?.message?.includes('API key was reported as leaked') ||
+          error?.message?.includes('Forbidden');
+
         if (isQuotaExceeded) {
-          console.log('⚠️ 할당량 초과 오류 감지, 재시도하지 않고 상위로 전달');
-          throw error; // 즉시 throw하여 API 라우트에서 다른 키로 전환하도록 함
-        }
-        
-        // 503 에러나 일시적인 오류인 경우에만 재시도
-        const isRetryable = 
-          error?.message?.includes('503') ||
-          error?.message?.includes('overloaded') ||
-          (error?.message?.includes('rate limit') && !error?.message?.includes('429'));
-
-        if (!isRetryable || attempt === maxRetries - 1) {
-          throw error;
+          this.updateKeyStatus(this.currentApiKey, 'quota-exceeded');
+          console.log(`⚠️ API 키 할당량 초과 감지: ${this.maskKey(this.currentApiKey)}`);
+        } else if (isInvalidKey) {
+          this.updateKeyStatus(this.currentApiKey, 'invalid');
+          console.log(`⚠️ 유효하지 않은 API 키 감지: ${this.maskKey(this.currentApiKey)}`);
+        } else {
+          // 재시도 불가능한 알 수 없는 오류. 키 상태는 바꾸지 않고 다음 키로 전환.
+          console.log(`⚠️ 알 수 없는 오류로 인해 키 전환 시도: ${this.maskKey(this.currentApiKey)}`);
         }
 
-        // Exponential backoff: 1초, 2초, 4초
-        const delay = baseDelay * Math.pow(2, attempt);
-        console.log(`API 요청 실패 (시도 ${attempt + 1}/${maxRetries}). ${delay}ms 후 재시도...`);
-        await new Promise(resolve => setTimeout(resolve, delay));
+        const nextKey = this.getNextValidKey();
+
+        if (nextKey) {
+          console.log(`🔄 다른 API 키로 자동 전환: ${this.maskKey(nextKey)}`);
+          this.switchToKey(nextKey);
+          attemptsOnCurrentKey = 0;
+        } else {
+          console.log('❌ 사용 가능한 다른 API 키가 없습니다.');
+          
+          const allKeys = this.availableKeys;
+          const invalidCount = allKeys.filter(k => this.keyStatus.get(k)?.status === 'invalid').length;
+          const quotaCount = allKeys.filter(k => this.keyStatus.get(k)?.status === 'quota-exceeded').length;
+
+          let errorMessage = '모든 API 키를 시도했지만 요청에 실패했습니다.';
+          if (invalidCount > 0 && invalidCount + quotaCount >= allKeys.length) {
+            errorMessage = '모든 활성 API 키가 유효하지 않거나 할당량을 초과했습니다. 설정을 확인해주세요.';
+          } else if (quotaCount > 0 && quotaCount === allKeys.length) {
+            errorMessage = '모든 API 키의 할당량이 초과되었습니다. 잠시 후 다시 시도해주세요.';
+          } else if (invalidCount > 0 && invalidCount === allKeys.length) {
+            errorMessage = '모든 API 키가 유효하지 않습니다. 설정을 확인해주세요.';
+          }
+          
+          const friendlyError = new Error(errorMessage);
+          (friendlyError as any).status = 500;
+          throw friendlyError;
+        }
       }
     }
+  }
 
-    throw lastError || new Error('재시도 실패');
+  // API 키 전환
+  private switchToKey(newApiKey: string): void {
+    const oldKey = this.currentApiKey;
+    this.currentApiKey = newApiKey;
+    this.genAI = new GoogleGenerativeAI(newApiKey);
+    console.log(`🔄 API 키가 ${this.maskKey(oldKey)}에서 ${this.maskKey(newApiKey)}로 전환되었습니다.`);
+  }
+
+  // 키 마스킹 유틸리티
+  private maskKey(key?: string): string {
+    if (!key) return '없음';
+    if (key.length <= 8) return `${key.substring(0, 2)}...${key.substring(key.length - 2)}`;
+    return `${key.substring(0, 4)}...${key.substring(key.length - 4)}`;
   }
 
   async chat(request: ChatRequest): Promise<ChatResponse> {
     const model = request.model || this.defaultModel;
-    
+
+    // 현재 사용 중인 API 키 정보 로그
+    const currentKeyInfo = this.getCurrentApiKeyInfo();
+    console.log(`💬 채팅 요청 시작 (현재 키: ${currentKeyInfo.maskedKey}, ${currentKeyInfo.index + 1}/${currentKeyInfo.total})`);
+
     // Generation config 구성 (모델 초기화 시 사용)
     const modelGenerationConfig: any = {};
-    
+
     // 최대 출력 토큰 수 설정
     // 주의: 너무 작은 값(256 미만)은 빈 응답을 유발할 수 있음
     if (request.maxOutputTokens !== undefined && request.maxOutputTokens < 8192) {
@@ -83,15 +221,15 @@ export class GeminiClient {
       const safeMaxTokens = Math.max(256, request.maxOutputTokens);
       modelGenerationConfig.maxOutputTokens = safeMaxTokens;
     }
-    
+
     // ThinkingBudget 설정 (Pro 모델만)
     if (model === 'gemini-pro' && request.thinkingBudget !== undefined) {
       modelGenerationConfig.thinkingConfig = {
         thinkingBudget: request.thinkingBudget
       };
     }
-    
-    const geminiModel = this.genAI.getGenerativeModel({ 
+
+    const geminiModel = this.genAI.getGenerativeModel({
       model: model === 'gemini-flash' ? 'gemini-2.5-flash' : 'gemini-2.5-pro',
       generationConfig: Object.keys(modelGenerationConfig).length > 0 ? modelGenerationConfig : undefined,
     });
@@ -405,11 +543,20 @@ let clientInstance: GeminiClient | null = null;
 
 export function getGeminiClient(): GeminiClient {
   if (!clientInstance) {
-    const apiKey = process.env.GOOGLE_GEMINI_API_KEY;
-    if (!apiKey) {
-      throw new Error('GOOGLE_GEMINI_API_KEY environment variable is not set');
+    // 환경 변수에서 모든 API 키 가져오기
+    const apiKeys = [
+      process.env.GOOGLE_GEMINI_API_KEY,
+      process.env.GOOGLE_GEMINI_API_KEY_2,
+      process.env.GOOGLE_GEMINI_API_KEY_3,
+      process.env.GOOGLE_GEMINI_API_KEY_4,
+      process.env.GOOGLE_GEMINI_API_KEY_5,
+    ].filter(key => key) as string[]; // 존재하는 키만 필터링
+
+    if (apiKeys.length === 0) {
+      throw new Error('사용 가능한 API 키가 없습니다. 환경 변수에 API 키를 설정해주세요.');
     }
-    clientInstance = new GeminiClient(apiKey);
+
+    clientInstance = new GeminiClient(apiKeys);
   }
   return clientInstance;
 }

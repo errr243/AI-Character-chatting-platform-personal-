@@ -14,26 +14,20 @@ import {
 } from '@/lib/storage/characters';
 
 export default function CharactersPage() {
-  const [characters, setCharacters] = useState<Character[]>([]);
+  const [characters, setCharacters] = useState<Character[]>(() => {
+    initializeDefaultCharacters();
+    try {
+      return loadCharacters();
+    } catch (error) {
+      console.error('Failed to load characters on init:', error);
+      return [];
+    }
+  });
   const [selectedCharacter, setSelectedCharacter] = useState<Character | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
   const [formData, setFormData] = useState<Partial<Character>>({});
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-
-  useEffect(() => {
-    initializeDefaultCharacters();
-    loadCharactersData();
-  }, []);
-
-  const loadCharactersData = () => {
-    try {
-      const loaded = loadCharacters();
-      setCharacters(loaded);
-    } catch (error) {
-      console.error('Failed to load characters:', error);
-    }
-  };
 
   const handleCreate = () => {
     setIsCreating(true);
@@ -104,7 +98,7 @@ export default function CharactersPage() {
         });
       }
 
-      loadCharactersData();
+      setCharacters(loadCharacters());
       setIsEditing(false);
       setIsCreating(false);
       setSelectedCharacter(null);
@@ -119,7 +113,7 @@ export default function CharactersPage() {
 
     try {
       deleteCharacter(selectedCharacter.id);
-      loadCharactersData();
+      setCharacters(loadCharacters());
       setSelectedCharacter(null);
       setShowDeleteConfirm(false);
     } catch (error) {
@@ -458,7 +452,7 @@ export default function CharactersPage() {
           <div className="bg-[var(--bg-secondary)] rounded-lg p-6 max-w-md w-full mx-4">
             <h3 className="text-lg font-bold text-[var(--text-primary)] mb-4">캐릭터 삭제</h3>
             <p className="text-[var(--text-secondary)] mb-6">
-              정말로 "<span className="text-[var(--text-primary)] font-medium">{selectedCharacter?.name}</span>" 캐릭터를 삭제하시겠습니까?
+              정말로 &quot;<span className="text-[var(--text-primary)] font-medium">{selectedCharacter?.name}</span>&quot; 캐릭터를 삭제하시겠습니까?
               <br />
               이 작업은 되돌릴 수 없습니다.
             </p>

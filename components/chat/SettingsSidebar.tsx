@@ -76,7 +76,7 @@ export const SettingsSidebar: React.FC<SettingsSidebarProps> = ({
   const fileInputRef = useRef<HTMLInputElement>(null);
 
       // API 키 관리 상태
-      const [apiKeys, setApiKeys] = useState<ApiKeyInfo[]>([]);
+      const [apiKeys, setApiKeys] = useState<ApiKeyInfo[]>(loadApiKeys);
       const [showAddKey, setShowAddKey] = useState(false);
       const [newKeyName, setNewKeyName] = useState('');
       const [newKeyValue, setNewKeyValue] = useState('');
@@ -90,23 +90,20 @@ export const SettingsSidebar: React.FC<SettingsSidebarProps> = ({
         onMaxActiveLorebooksChange(settings.maxActiveLorebooks);
         onAutoScrollChange(settings.autoScroll);
         
-        // API 키 목록 로드
-        const keys = loadApiKeys();
-        setApiKeys(keys);
-        
         // 선택된 키 ID 로드
         const selectedId = getSelectedApiKeyId();
-        if (selectedId && keys.find(k => k.id === selectedId)) {
+        if (selectedId && apiKeys.find(k => k.id === selectedId)) {
+          // eslint-disable-next-line react-hooks/set-state-in-effect
           setSelectedKeyId(selectedId);
-        } else if (keys.length > 0) {
+        } else if (apiKeys.length > 0) {
           // 선택된 키가 없거나 유효하지 않으면 첫 번째 활성 키 선택
-          const firstActiveKey = keys.find(k => k.isActive);
+          const firstActiveKey = apiKeys.find(k => k.isActive);
           if (firstActiveKey) {
             setSelectedKeyId(firstActiveKey.id);
             setSelectedApiKeyId(firstActiveKey.id);
           }
         }
-      }, []);
+      }, [apiKeys, onOutputSpeedChange, onMaxOutputTokensChange, onThinkingBudgetChange, onMaxActiveLorebooksChange, onAutoScrollChange]);
 
   const handleOutputSpeedChange = (speed: OutputSpeed) => {
     onOutputSpeedChange(speed);
@@ -658,19 +655,19 @@ export const SettingsSidebar: React.FC<SettingsSidebarProps> = ({
                   onManualSummarize();
                 }}
                 disabled={totalMessages < 2}
-                className="flex-1 px-3 py-2 bg-[var(--accent-blue)] hover:bg-[var(--accent-blue-hover)] disabled:bg-[var(--bg-tertiary)] disabled:text-[var(--text-tertiary)] disabled:cursor-not-allowed text-white text-sm font-medium rounded-md transition-colors flex items-center justify-center gap-2"
+                className="flex-1 px-2 py-1.5 bg-[var(--accent-blue)] hover:bg-[var(--accent-blue-hover)] disabled:bg-[var(--bg-tertiary)] disabled:text-[var(--text-tertiary)] disabled:cursor-not-allowed text-white text-xs font-medium rounded-md transition-colors flex items-center justify-center gap-1"
               >
-                <Sparkles size={14} />
+                <Sparkles size={12} />
                 요약 생성
               </button>
             )}
 
             <button
               onClick={() => onOpenMemoryModal?.()}
-              className="px-3 py-2 bg-[var(--bg-tertiary)] hover:bg-[var(--bg-hover)] text-[var(--text-primary)] text-sm font-medium rounded-md transition-colors flex items-center justify-center gap-2"
+              className="px-2 py-1.5 bg-[var(--bg-tertiary)] hover:bg-[var(--bg-hover)] text-[var(--text-primary)] text-xs font-medium rounded-md transition-colors flex items-center justify-center gap-1"
               title="자세히 보기"
             >
-              <ChevronRight size={14} />
+              <ChevronRight size={12} />
             </button>
           </div>
 
@@ -854,16 +851,16 @@ export const SettingsSidebar: React.FC<SettingsSidebarProps> = ({
           <div className="space-y-2.5">
             <button
               onClick={handleExportData}
-              className="w-full flex items-center justify-center gap-2 px-5 py-2.5 bg-[var(--bg-glass)] backdrop-blur-lg border border-[var(--border-color)] text-[var(--text-primary)] rounded-xl text-sm font-semibold hover:bg-[var(--bg-glass-hover)] hover:border-[var(--border-hover)] hover:-translate-y-0.5 transition-all duration-300"
+              className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-[var(--bg-glass)] backdrop-blur-lg border border-[var(--border-color)] text-[var(--text-primary)] rounded-lg text-sm font-medium hover:bg-[var(--bg-glass-hover)] hover:border-[var(--border-hover)] transition-all duration-200"
             >
-              <Download size={16} />
+              <Download size={14} />
               데이터 내보내기
             </button>
             <button
               onClick={handleImportData}
-              className="w-full flex items-center justify-center gap-2 px-5 py-2.5 bg-[var(--bg-glass)] backdrop-blur-lg border border-[var(--border-color)] text-[var(--text-primary)] rounded-xl text-sm font-semibold hover:bg-[var(--bg-glass-hover)] hover:border-[var(--border-hover)] hover:-translate-y-0.5 transition-all duration-300"
+              className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-[var(--bg-glass)] backdrop-blur-lg border border-[var(--border-color)] text-[var(--text-primary)] rounded-lg text-sm font-medium hover:bg-[var(--bg-glass-hover)] hover:border-[var(--border-hover)] transition-all duration-200"
             >
-              <Upload size={16} />
+              <Upload size={14} />
               데이터 가져오기
             </button>
             <input
@@ -883,10 +880,10 @@ export const SettingsSidebar: React.FC<SettingsSidebarProps> = ({
         <div className="border-t border-[var(--border-color)] pt-5">
           <button
             onClick={() => setShowAdvanced(!showAdvanced)}
-            className="w-full flex items-center justify-between text-sm font-semibold text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors py-2 px-1 rounded-lg hover:bg-[var(--bg-glass)]"
+            className="w-full flex items-center justify-between text-sm font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors py-2 px-3 rounded-lg hover:bg-[var(--bg-glass)]"
           >
             <span className="flex items-center gap-2">
-              <SlidersHorizontal size={16} />
+              <SlidersHorizontal size={14} />
               고급 설정
             </span>
             <svg

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Plus, Trash2, Edit2, Check, X, BookOpen, ToggleLeft, ToggleRight } from 'lucide-react';
 import {
   loadLorebooks,
@@ -19,19 +19,10 @@ export const LorebookManager: React.FC<LorebookManagerProps> = ({
   maxActive,
   onMaxActiveChange,
 }) => {
-  const [lorebooks, setLorebooks] = useState<LorebookEntry[]>([]);
+  const [lorebooks, setLorebooks] = useState<LorebookEntry[]>(loadLorebooks);
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [formData, setFormData] = useState({ keywords: '', content: '' });
-
-  useEffect(() => {
-    loadLorebooksData();
-  }, []);
-
-  const loadLorebooksData = () => {
-    const loaded = loadLorebooks();
-    setLorebooks(loaded);
-  };
 
   const enabledCount = lorebooks.filter(l => l.enabled).length;
 
@@ -61,7 +52,7 @@ export const LorebookManager: React.FC<LorebookManagerProps> = ({
 
       setFormData({ keywords: '', content: '' });
       setShowAddForm(false);
-      loadLorebooksData();
+      setLorebooks(loadLorebooks());
     } catch (error: any) {
       alert(error.message || '로어북 추가에 실패했습니다.');
     }
@@ -104,7 +95,7 @@ export const LorebookManager: React.FC<LorebookManagerProps> = ({
       setEditingId(null);
       setFormData({ keywords: '', content: '' });
       setShowAddForm(false);
-      loadLorebooksData();
+      setLorebooks(loadLorebooks());
     } catch (error: any) {
       alert(error.message || '로어북 수정에 실패했습니다.');
     }
@@ -113,7 +104,7 @@ export const LorebookManager: React.FC<LorebookManagerProps> = ({
   const handleDelete = (id: string) => {
     if (confirm('이 로어북을 삭제하시겠습니까?')) {
       deleteLorebook(id);
-      loadLorebooksData();
+      setLorebooks(loadLorebooks());
     }
   };
 
@@ -124,7 +115,7 @@ export const LorebookManager: React.FC<LorebookManagerProps> = ({
     }
 
     updateLorebook(id, { enabled: !enabled });
-    loadLorebooksData();
+    setLorebooks(loadLorebooks());
   };
 
   const handleCancel = () => {

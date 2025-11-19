@@ -104,10 +104,20 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 선택된 API 키로 클라이언트 생성
+    // 선택된 API 키 또는 사용 가능한 모든 키로 클라이언트 생성
     const { GeminiClient } = await import('@/lib/gemini/client');
-    const client = new GeminiClient(selectedApiKey);
-    
+
+    // 환경 변수 키와 클라이언트 키를 결합하여 GeminiClient 생성
+    const allAvailableKeys = [selectedApiKey, ...allEnvKeys, ...clientKeys].filter(key => key) as string[];
+    const uniqueKeys = Array.from(new Set(allAvailableKeys)); // 중복 제거
+
+    console.log(`🔧 GeminiClient 생성: 총 ${uniqueKeys.length}개의 API 키 사용`);
+    uniqueKeys.forEach((key, index) => {
+      console.log(`   [${index + 1}] ${maskKey(key)}`);
+    });
+
+    const client = new GeminiClient(uniqueKeys);
+
     let response;
     try {
       response = await client.chat({
@@ -122,107 +132,9 @@ export async function POST(request: NextRequest) {
         thinkingBudget,
       });
     } catch (error: any) {
-      // 429 (할당량 초과) 또는 400 (잘못된 API 키) 오류 발생 시 다른 API 키로 재시도
-      // 원본 에러 메시지도 확인 (lib/gemini/client.ts에서 보존된 originalMessage)
-      const originalMessage = error?.originalMessage || error?.message || '';
-      const originalStatus = error?.originalStatus || error?.status || '';
-      
-      const isQuotaError = 
-        originalMessage?.includes('429') || 
-        originalMessage?.includes('quota') || 
-        originalMessage?.includes('Quota exceeded') ||
-        error?.message?.includes('429') || 
-        error?.message?.includes('quota') || 
-        error?.message?.includes('Quota exceeded');
-      
-      const isInvalidKeyError = 
-        originalStatus === 400 ||
-        originalMessage?.includes('400') || 
-        originalMessage?.includes('API key not valid') || 
-        originalMessage?.includes('API_KEY_INVALID') ||
-        error?.message?.includes('400') || 
-        error?.message?.includes('API key not valid') || 
-        error?.message?.includes('API_KEY_INVALID');
-      
-      if (isQuotaError || isInvalidKeyError) {
-        const errorType = isInvalidKeyError ? '잘못된 API 키' : '할당량 초과';
-        console.log(`⚠️ ${errorType} 오류 발생, 다른 API 키로 전환 시도...`);
-        // 보안: API 키의 일부만 로그 (처음 4자 + ... + 마지막 4자)
-        const maskedKey = selectedApiKey 
-          ? `${selectedApiKey.substring(0, 4)}...${selectedApiKey.substring(selectedApiKey.length - 4)}`
-          : '없음';
-        const keyLabel = keyLabelMap.get(selectedApiKey) || keySource || '알 수 없음';
-        console.log(`현재 사용 중인 키: ${keyLabel} (${maskedKey})`);
-        
-        // 현재 사용한 키를 제외한 나머지 키들
-        // 모든 사용 가능한 키를 하나의 배열로 합치기
-        const allAvailableKeys = [...allEnvKeys, ...clientKeys];
-        const uniqueKeys = Array.from(new Set(allAvailableKeys)); // 중복 제거
-        
-        // 현재 사용한 키를 제외한 나머지 키들
-        let fallbackKeys = uniqueKeys.filter(key => key !== selectedApiKey);
-        
-        console.log(`🔄 ${keySource} 키 실패, ${fallbackKeys.length}개의 대체 API 키로 재시도 중...`);
-        console.log(`   - 환경 변수 키: ${allEnvKeys.length}개`);
-        console.log(`   - 클라이언트 키: ${clientKeys.length}개`);
-        console.log(`   - 총 사용 가능한 키: ${uniqueKeys.length}개`);
-        
-        if (fallbackKeys.length === 0) {
-          console.error('❌ 사용 가능한 대체 API 키가 없습니다.');
-          const finalError: any = new Error('모든 API 키가 유효하지 않습니다. 환경 변수 또는 설정에서 유효한 API 키를 확인해주세요.');
-          finalError.originalMessage = originalMessage;
-          finalError.originalStatus = originalStatus;
-          throw finalError;
-        }
-
-        for (let i = 0; i < fallbackKeys.length; i++) {
-          const fallbackKey = fallbackKeys[i];
-          const fallbackLabel = keyLabelMap.get(fallbackKey) || `대체 키 #${i + 1}`;
-          
-          try {
-            console.log(
-              `🔄 API 키 ${i + 1}/${fallbackKeys.length} 시도 중... (${fallbackLabel}, ${maskKey(fallbackKey)})`
-            );
-            const fallbackClient = new GeminiClient(fallbackKey);
-            response = await fallbackClient.chat({
-              messages: messages as ChatMessage[],
-              characterName,
-              characterPersonality,
-              contextSummary,
-              userNote,
-              activeLorebooks,
-              model: model || 'gemini-pro',
-              maxOutputTokens,
-              thinkingBudget,
-            });
-            console.log(`✅ API 키 전환 성공! (키 ${i + 1}/${fallbackKeys.length} 사용)`);
-            break; // 성공하면 루프 종료
-          } catch (retryError: any) {
-            const isRetryQuotaError = retryError?.message?.includes('429') || retryError?.message?.includes('quota');
-            const isRetryInvalidKeyError = retryError?.message?.includes('400') || retryError?.message?.includes('API key not valid');
-            
-            if (isRetryQuotaError) {
-              console.log(`❌ 키 ${i + 1}/${fallbackKeys.length}도 할당량 초과, 다음 키 시도...`);
-            } else if (isRetryInvalidKeyError) {
-              console.log(`❌ 키 ${i + 1}/${fallbackKeys.length}도 잘못된 키, 다음 키 시도...`);
-            } else {
-              console.log(`❌ 키 ${i + 1}/${fallbackKeys.length} 오류: ${retryError?.message?.substring(0, 50)}`);
-            }
-            continue; // 다음 키 시도
-          }
-        }
-        
-        // 모든 키가 실패한 경우 명확한 에러 메시지와 함께 throw
-        if (!response) {
-          console.error('❌ 모든 API 키가 실패했습니다.');
-          const finalError: any = new Error('모든 API 키가 유효하지 않습니다. 환경 변수 또는 설정에서 유효한 API 키를 확인해주세요.');
-          finalError.originalMessage = originalMessage;
-          finalError.originalStatus = originalStatus;
-          throw finalError;
-        }
-      } else {
-        throw error; // 429/400이 아닌 다른 오류는 그대로 throw
-      }
+      // GeminiClient 내부에서 API 키 자동 전환 로직이 처리되므로,
+      // 여기서는 최종 오류만 다시 throw
+      throw error;
     }
 
     console.log('=== Gemini Client Response ===');

@@ -27,6 +27,7 @@ Android/
 .vscode/
 .cursor/
 .claude/
+.bugnfix/
 .cache/
 .local/
 .config/
