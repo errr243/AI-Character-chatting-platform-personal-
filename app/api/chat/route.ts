@@ -18,18 +18,19 @@ export async function POST(request: NextRequest) {
     console.log('Active lorebooks:', activeLorebooks?.length || 0);
     // 보안: API 키 존재 여부만 로그 (실제 키 값은 로그하지 않음)
     console.log('Has custom API key:', !!apiKey);
-    
+
     // 환경 변수에서 사용 가능한 API 키 개수 확인
     const envKeyEntries = [
       { key: process.env.GOOGLE_GEMINI_API_KEY, label: 'GOOGLE_GEMINI_API_KEY' },
+      { key: process.env.GOOGLE_GEMINI_API_KEY_1, label: 'GOOGLE_GEMINI_API_KEY_1' },
       { key: process.env.GOOGLE_GEMINI_API_KEY_2, label: 'GOOGLE_GEMINI_API_KEY_2' },
       { key: process.env.GOOGLE_GEMINI_API_KEY_3, label: 'GOOGLE_GEMINI_API_KEY_3' },
       { key: process.env.GOOGLE_GEMINI_API_KEY_4, label: 'GOOGLE_GEMINI_API_KEY_4' },
       { key: process.env.GOOGLE_GEMINI_API_KEY_5, label: 'GOOGLE_GEMINI_API_KEY_5' },
     ].filter((entry): entry is { key: string; label: string } => Boolean(entry.key));
-    
+
     const allEnvKeys = envKeyEntries.map(entry => entry.key);
-    
+
     // 클라이언트에서 전달된 모든 활성 API 키들
     const clientKeys = Array.isArray(clientApiKeys) ? clientApiKeys.filter(Boolean) : [];
 
@@ -47,7 +48,7 @@ export async function POST(request: NextRequest) {
       if (key.length <= 8) return `${key.substring(0, 2)}...${key.substring(key.length - 2)}`;
       return `${key.substring(0, 4)}...${key.substring(key.length - 4)}`;
     };
-    
+
     console.log(`📊 환경 변수에서 ${allEnvKeys.length}개의 API 키를 찾았습니다.`);
     console.log(`📊 클라이언트에서 ${clientKeys.length}개의 API 키를 받았습니다.`);
 
@@ -72,7 +73,7 @@ export async function POST(request: NextRequest) {
     // 2. 클라이언트에서 제공한 키는 fallback으로만 사용
     let selectedApiKey: string | undefined;
     let keySource = '';
-    
+
     if (allEnvKeys.length > 0) {
       // 환경 변수 키 우선 사용
       const selectedEnvEntry = envKeyEntries[0];
@@ -96,7 +97,7 @@ export async function POST(request: NextRequest) {
     } else {
       console.warn('⚠️ API 키를 찾을 수 없습니다.');
     }
-    
+
     if (!selectedApiKey) {
       return NextResponse.json(
         { error: 'API 키가 설정되지 않았습니다. 환경 변수 또는 설정에서 API 키를 추가해주세요.' },
