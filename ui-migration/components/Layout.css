@@ -1,0 +1,62 @@
+.layout-container {
+    display: flex;
+    width: 100vw;
+    height: 100vh;
+    background-color: var(--bg-app);
+}
+
+.layout-sidebar {
+    width: 280px;
+    height: 100%;
+    border-right: 1px solid var(--border-subtle);
+    background-color: var(--bg-sidebar);
+    flex-shrink: 0;
+    transition: width var(--transition-normal), opacity var(--transition-normal);
+    overflow: hidden;
+    opacity: 1;
+    white-space: nowrap;
+    /* Prevent text wrapping during transition */
+}
+
+.layout-right-sidebar {
+    border-right: none;
+    border-left: 1px solid var(--border-subtle);
+    width: 300px;
+    /* Slightly wider for details */
+}
+
+.layout-sidebar.closed {
+    width: 0;
+    opacity: 0;
+    border-right: none;
+    border-left: none;
+}
+
+.layout-main {
+    flex: 1;
+    height: 100%;
+    position: relative;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
+@media (max-width: 1024px) {
+    .layout-right-sidebar {
+        position: absolute;
+        right: 0;
+        top: 0;
+        bottom: 0;
+        z-index: 20;
+        box-shadow: -4px 0 20px rgba(0, 0, 0, 0.5);
+    }
+}
+
+@media (max-width: 768px) {
+    .layout-sidebar {
+        width: 0;
+        overflow: hidden;
+    }
+
+    /* We might want a toggle for mobile later */
+}

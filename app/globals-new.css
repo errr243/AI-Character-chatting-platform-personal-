@@ -1,0 +1,77 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+    :root {
+        /* Solid Minimalist Palette (Zinc & Indigo) */
+        /* No Gradients. Pure Colors. */
+
+        --background: 240 10% 3.9%;
+        /* #09090b */
+        --foreground: 0 0% 98%;
+        /* #fafafa */
+
+        --card: 240 10% 3.9%;
+        --card-foreground: 0 0% 98%;
+
+        --popover: 240 10% 3.9%;
+        --popover-foreground: 0 0% 98%;
+
+        --primary: 0 0% 98%;
+        /* White for primary actions */
+        --primary-foreground: 240 5.9% 10%;
+
+        --secondary: 240 3.7% 15.9%;
+        /* #27272a */
+        --secondary-foreground: 0 0% 98%;
+
+        --muted: 240 3.7% 15.9%;
+        --muted-foreground: 240 5% 64.9%;
+
+        --accent: 240 3.7% 15.9%;
+        --accent-foreground: 0 0% 98%;
+
+        --destructive: 0 62.8% 30.6%;
+        --destructive-foreground: 0 0% 98%;
+
+        --border: 240 3.7% 15.9%;
+        --input: 240 3.7% 15.9%;
+        --ring: 240 4.9% 83.9%;
+
+        --radius: 0.5rem;
+        /* Slightly sharper corners */
+    }
+
+    * {
+        border-color: hsl(var(--border));
+    }
+
+    body {
+        background-color: hsl(var(--background));
+        color: hsl(var(--foreground));
+        font-feature-settings: "rlig" 1, "calt" 1;
+        /* NO BACKGROUND IMAGES OR GRADIENTS */
+    }
+}
+
+@layer utilities {
+
+    /* Clean Utilities - No Blurs, No Glows */
+    .solid-card {
+        background-color: hsl(var(--card));
+        border: 1px solid hsl(var(--border));
+        border-radius: var(--radius);
+    }
+
+    .solid-button {
+        background-color: hsl(var(--primary));
+        color: hsl(var(--primary-foreground));
+        font-weight: 500;
+        transition: opacity 0.2s;
+    }
+
+    .solid-button:hover {
+        opacity: 0.9;
+    }
+}
