@@ -282,7 +282,17 @@ export class GeminiClient {
         }
       }
 
-      characterContext += '\n\n자연스럽고 친근하게 대화하세요.';
+
+      // 대화 스타일 및 규칙
+      characterContext += '\n\n[중요한 규칙]';
+      characterContext += '\n- 당신은 절대로 사용자를 대신하여 메시지를 작성하면 안 됩니다.';
+      characterContext += '\n- 사용자의 다음 행동이나 대사를 가정하거나 상상해서 작성하지 마세요.';
+      characterContext += '\n- 당신의 응답만 작성하고, 대화를 이어가는 것은 사용자의 몫입니다.';
+      characterContext += '\n\n[대화 스타일 가이드]';
+      characterContext += '\n- 목차나 번호 매기기 없이 자연스럽게 대화하세요.';
+      characterContext += '\n- "1. 2. 3..." 또는 "첫째, 둘째, 셋째..." 같은 형식적인 나열은 피하세요.';
+      characterContext += '\n- 마치 실제 사람처럼 자연스럽고 유기적으로 대화를 이어가세요.';
+      characterContext += '\n- 정보를 전달할 때도 이야기하듯 풀어서 설명하세요.';
     }
 
     // 대화 기록을 Gemini 형식으로 변환
