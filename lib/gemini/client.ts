@@ -167,7 +167,7 @@ export class GeminiClient {
           attemptsOnCurrentKey = 0;
         } else {
           console.log('❌ 사용 가능한 다른 API 키가 없습니다.');
-          
+
           const allKeys = this.availableKeys;
           const invalidCount = allKeys.filter(k => this.keyStatus.get(k)?.status === 'invalid').length;
           const quotaCount = allKeys.filter(k => this.keyStatus.get(k)?.status === 'quota-exceeded').length;
@@ -180,7 +180,7 @@ export class GeminiClient {
           } else if (invalidCount > 0 && invalidCount === allKeys.length) {
             errorMessage = '모든 API 키가 유효하지 않습니다. 설정을 확인해주세요.';
           }
-          
+
           const friendlyError = new Error(errorMessage);
           (friendlyError as any).status = 500;
           throw friendlyError;
@@ -241,19 +241,19 @@ export class GeminiClient {
       if (request.characterPersonality) {
         characterContext += `\n\n${request.characterPersonality}`;
       }
-      
+
       // 유저노트 추가 (사용자가 직접 작성한 세계관/상황 설정)
       if (request.userNote) {
         characterContext += `\n\n[사용자 노트 - 세계관/상황 설정]\n${request.userNote}`;
         characterContext += '\n\n(위 내용은 사용자가 직접 작성한 설정입니다. 이를 반드시 참고하여 대화하세요.)';
       }
-      
+
       // 이전 대화 요약 추가 (컨텍스트 보존)
       if (request.contextSummary) {
         characterContext += `\n\n[이전 대화 핵심 요약]\n${request.contextSummary}`;
         characterContext += '\n\n(위 내용은 최근 10턴 이전의 대화 요약입니다. 참고하되 최근 대화에 집중하세요.)';
       }
-      
+
       // 로어북 정보 추가 (키워드 기반)
       if (request.activeLorebooks && request.activeLorebooks.length > 0) {
         characterContext += '\n\n[로어북 - 추가 정보]';
@@ -263,7 +263,7 @@ export class GeminiClient {
         }
         characterContext += '\n\n(위 내용은 대화에서 언급된 키워드와 관련된 추가 설정입니다. 이를 참고하여 일관된 세계관과 캐릭터성을 유지하세요.)';
       }
-      
+
       // 응답 길이 제한이 있으면 프롬프트에 추가
       if (request.maxOutputTokens && request.maxOutputTokens < 8192) {
         const tokenLimit = request.maxOutputTokens;
@@ -281,7 +281,7 @@ export class GeminiClient {
           characterContext += '\n\n답변은 극도로 상세하고 심층적으로 작성하세요. 다양한 관점과 예시, 배경 설명을 풍부하게 포함하여 완전한 이해를 돕도록 하세요.';
         }
       }
-      
+
       characterContext += '\n\n자연스럽고 친근하게 대화하세요.';
     }
 
@@ -292,7 +292,7 @@ export class GeminiClient {
     try {
       // 채팅 히스토리 구성
       const chatHistory: Array<{ role: 'user' | 'model'; parts: Array<{ text: string }> }> = [];
-      
+
       // 캐릭터 설정이 있고 첫 메시지인 경우, 히스토리 시작 부분에 추가
       if (characterContext && history.length === 0) {
         chatHistory.push({
@@ -314,7 +314,7 @@ export class GeminiClient {
             parts: [{ text: '시작하겠습니다.' }],
           });
         }
-        
+
         // 기존 대화 히스토리 추가
         chatHistory.push(...history.map(msg => ({
           role: (msg.role === 'user' ? 'user' : 'model') as 'user' | 'model',
@@ -327,7 +327,7 @@ export class GeminiClient {
           parts: [{ text: '시작하겠습니다.' }],
         });
       }
-      
+
       // 히스토리 검증: 첫 번째 메시지는 반드시 'user'여야 함
       if (chatHistory.length > 0 && chatHistory[0].role !== 'user') {
         console.error('Invalid chat history - first message is not user:', JSON.stringify(chatHistory, null, 2));
@@ -335,7 +335,7 @@ export class GeminiClient {
         console.error('Character context:', characterContext ? 'present' : 'absent');
         throw new Error('채팅 히스토리 구성 오류: 첫 번째 메시지는 사용자 메시지여야 합니다.');
       }
-      
+
       // 디버깅: 히스토리 구조 확인
       if (chatHistory.length === 0) {
         console.warn('Warning: chatHistory is empty, adding default user message');
@@ -353,7 +353,7 @@ export class GeminiClient {
           parts: [{ text: '시작하겠습니다.' }],
         });
       }
-      
+
       if (chatHistory[0].role !== 'user') {
         console.error('Error: First message in chatHistory is not user:', chatHistory[0]);
         // 첫 번째 메시지를 user로 교체
@@ -368,7 +368,7 @@ export class GeminiClient {
         const chat = geminiModel.startChat({
           history: chatHistory,
         });
-        
+
         // thinkingBudget은 이미 generationConfig에 포함되어 모델 초기화 시 전달됨
         return await chat.sendMessage(currentMessage.content);
       });
@@ -387,8 +387,8 @@ export class GeminiClient {
       }
 
       const tokens = this.estimateTokens(
-        characterContext + 
-        request.messages.map(m => m.content).join('') + 
+        characterContext +
+        request.messages.map(m => m.content).join('') +
         message
       );
 
@@ -406,31 +406,31 @@ export class GeminiClient {
         statusText: error?.statusText,
         errorDetails: error?.errorDetails,
       });
-      
+
       // 원본 에러 정보 추출 (API 라우트에서 자동 전환을 위해 필요)
       const originalMessage = error?.message || '';
       // GoogleGenerativeAI 에러는 status 속성에 있음
       const originalStatus = error?.status || error?.statusCode || '';
-      
+
       // 사용자 친화적인 에러 메시지
       let errorMessage = '채팅 처리 중 오류가 발생했습니다.';
-      
+
       if (error?.message?.includes('503') || error?.message?.includes('overloaded')) {
         errorMessage = '서버가 일시적으로 과부하 상태입니다. 잠시 후 다시 시도해주세요.';
       } else if (error?.message?.includes('429') || error?.message?.includes('rate limit') || error?.message?.includes('quota')) {
         // 할당량 초과 오류 - 특별한 에러 타입으로 표시하여 API 라우트에서 처리
         // API 라우트에서 자동 전환 로직 처리
-        
+
         // 할당량 초과 오류 상세 처리
         const quotaMatch = error?.message?.match(/limit:\s*(\d+)/);
         const retryMatch = error?.message?.match(/retry in ([\d.]+)s/i);
         const modelMatch = error?.message?.match(/model:\s*([^\s,]+)/i);
-        
+
         let quotaInfo = '';
         if (quotaMatch) {
           quotaInfo = ` (일일 ${quotaMatch[1]}회 제한)`;
         }
-        
+
         let retryInfo = '';
         if (retryMatch) {
           const retrySeconds = Math.ceil(parseFloat(retryMatch[1]));
@@ -442,12 +442,12 @@ export class GeminiClient {
             retryInfo = ` 약 ${retrySeconds}초 후 재시도 가능합니다.`;
           }
         }
-        
+
         let modelInfo = '';
         if (modelMatch && modelMatch[1].includes('pro')) {
           modelInfo = ' Flash 모델로 전환하거나 잠시 후 다시 시도해주세요.';
         }
-        
+
         if (error?.message?.includes('free_tier')) {
           errorMessage = `무료 티어 일일 할당량을 초과했습니다.${quotaInfo}${retryInfo}${modelInfo || ' 잠시 후 다시 시도해주세요.'}`;
         } else {
@@ -458,20 +458,20 @@ export class GeminiClient {
       } else if (error?.message) {
         errorMessage = `오류: ${error.message}`;
       }
-      
+
       // 원본 에러 정보를 포함한 에러 객체 생성 (API 라우트에서 자동 전환을 위해)
       const enhancedError: any = new Error(errorMessage);
       enhancedError.originalMessage = originalMessage;
       enhancedError.originalStatus = originalStatus;
       enhancedError.status = originalStatus;
-      
+
       throw enhancedError;
     }
   }
 
   async summarize(prompt: string): Promise<string> {
     try {
-      const model = this.genAI.getGenerativeModel({ 
+      const model = this.genAI.getGenerativeModel({
         model: 'gemini-2.5-flash', // 요약에는 빠른 flash 모델 사용
         generationConfig: {
           maxOutputTokens: 2048, // 요약을 위해 충분한 토큰 할당
@@ -482,7 +482,7 @@ export class GeminiClient {
       console.log('📝 요약 요청 시작...');
       const result = await model.generateContent(prompt);
       const response = await result.response;
-      
+
       // 응답 확인
       if (!response) {
         console.error('❌ 응답 객체가 없습니다');
@@ -544,13 +544,17 @@ let clientInstance: GeminiClient | null = null;
 export function getGeminiClient(): GeminiClient {
   if (!clientInstance) {
     // 환경 변수에서 모든 API 키 가져오기
-    const apiKeys = [
+    const rawApiKeys = [
       process.env.GOOGLE_GEMINI_API_KEY,
+      process.env.GOOGLE_GEMINI_API_KEY_1,
       process.env.GOOGLE_GEMINI_API_KEY_2,
       process.env.GOOGLE_GEMINI_API_KEY_3,
       process.env.GOOGLE_GEMINI_API_KEY_4,
       process.env.GOOGLE_GEMINI_API_KEY_5,
-    ].filter(key => key) as string[]; // 존재하는 키만 필터링
+    ];
+
+    // 중복 제거 및 유효한 키만 필터링
+    const apiKeys = Array.from(new Set(rawApiKeys.filter(key => key && key.trim().length > 0))) as string[];
 
     if (apiKeys.length === 0) {
       throw new Error('사용 가능한 API 키가 없습니다. 환경 변수에 API 키를 설정해주세요.');
